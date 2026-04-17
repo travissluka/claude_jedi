@@ -134,7 +134,7 @@ ctest -L tier2              # run only tier2
 ctest -LE tier2             # exclude tier2 (i.e., tier1 only)
 ```
 
-**Repos using labels**: oops, ufo, ioda, vader, fv3-jedi, mpas-jedi, pyiri-jedi, soca, coupling. `FV3JEDI_TEST_TIER` env variable was removed in favor of labels.
+**Repos using labels**: oops, ufo, ioda, vader, saber, fv3-jedi, mpas-jedi, pyiri-jedi, soca, coupling. `FV3JEDI_TEST_TIER` and `SABER_TEST_TIER` env variables were removed in favor of labels.
 
 **Coding-norms tests are tier2** by convention (they're slow and run nightly, not per-commit).
 
@@ -163,17 +163,21 @@ Test names now start with the repo slug (no `test_` prefix, no `tier1_` in the n
 | soca | `soca_` |
 | coupling | `coupling_` |
 
-### SABER exception: testlist-file approach
+### SABER: component-gated `.cmake` include files
 
-SABER still uses **file-based tier lists** (not labels) because it expands each test over multiple MPI/OMP combinations. Tier files under `saber/test/testlist/`:
-- `saber_test_tier1-bump.txt`, `saber_test_tier1-bump-spectralb.txt`
-- `saber_test_tier1-bifourier.txt`, `-bifourier-ectrans.txt`
-- `saber_test_tier1-fastlam.txt`, `-fastlam-fftw.txt`, `-fastlam-regional_interpolation.txt`
-- `saber_test_tier1-gsi-geos.txt`
-- `saber_test_tier1-coupled.txt` (new: coupled covariance tests)
-- `saber_test_tier2.txt`
+SABER registers tests directly via `saber_add_test(...)` calls (wrapper around `ecbuild_add_test`) in per-component `.cmake` files under `test/testlist/`, which `test/CMakeLists.txt` `include()`s conditionally based on `SABER_TEST_<COMPONENT>` flags (auto-set from feature detection, overridable via env vars):
 
-Controlled by `SABER_TEST_TIER` env/CMake variable. Tier 1 = MPI-only; tier 2 = MPI + OpenMP. Each listed test is generated for multiple MPI/OMP combinations (1/1, 2/1, 4/1, 1/2).
+- `saber_base.cmake` — always included; dirac / diffusion / interpolation / rescaling core tests
+- `saber_bump.cmake` — gated by `SABER_TEST_BUMP`
+- `saber_spectralb.cmake`, `saber_spectralb-vader.cmake` — gated by `SABER_TEST_SPECTRALB`
+- `saber_bifourier.cmake`, `saber_bifourier-ectrans.cmake` — gated by `SABER_TEST_BIFOURIER` (+ ECTRANS detection)
+- `saber_fastlam.cmake`, `saber_fastlam-fftw.cmake`, `saber_fastlam-regional_interpolation.cmake` — gated by `SABER_TEST_FASTLAM`
+- `saber_gsi-geos.cmake`, `saber_gsi-gfs.cmake` — gated by `SABER_TEST_GSI_GEOS` / `SABER_TEST_GSI_GFS`
+- `saber_vader.cmake`, `saber_vader_with_trans.cmake` — gated by `SABER_TEST_VADER`
+- `saber_coupled.cmake` — coupled-covariance tests
+- `saber_torchbalance.cmake` — gated by `SABER_TEST_TORCHBALANCE`
+
+Tier is expressed via `LABELS tier2` on individual test entries (MPI+OpenMP expansions, tutorial tests, etc.) — same convention as the other repos. Each test is still generated for multiple MPI/OMP combinations (1/1, 2/1, 4/1, 1/2); the 1/2 OMP-2 variants get `LABELS tier2`.
 
 ## Adjoint Tests (Dot-Product Test)
 

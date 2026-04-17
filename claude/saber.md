@@ -1,6 +1,6 @@
 # SABER (System for Atmospheric and Boundary Layer Error Representation)
 
-> Last updated against commit `8ae1ea2b` (2026-04-16). Run `cd bundle/saber && git log --oneline 8ae1ea2b..HEAD` to see what changed since.
+> Last updated against commit `2a1c6143` (2026-04-16). Run `cd bundle/saber && git log --oneline 2a1c6143..HEAD` to see what changed since.
 
 ## Overview
 
@@ -189,7 +189,7 @@ Main block: `FastLAM` (59KB impl). Layer types: `LayerSpec` (spectral), `LayerHa
 
 ### `coupled/` — Block-diagonal coupled covariance (C++ only)
 
-`CoupledErrorCovariance` implements block-diagonal B for coupled DA (e.g. atmosphere-ocean) built on `oops::TraitsCoupled<TRAIT_1, TRAIT_2>`. Each component has its own error-covariance block configured independently, and an optional **common outer block chain** is applied to the combined state (useful for cross-component localization or balance). Parameters in `CoupledErrorCovarianceParameters`; factory registration in `instantiateCoupledCovarFactory.h`. Tested via `quenchCoupledErrorCovarianceToolbox` with the `coupled_dirac_id` reference test (listed in `saber_test_tier1-coupled.txt`).
+`CoupledErrorCovariance` implements block-diagonal B for coupled DA (e.g. atmosphere-ocean) built on `oops::TraitsCoupled<TRAIT_1, TRAIT_2>`. Each component has its own error-covariance block configured independently, and an optional **common outer block chain** is applied to the combined state (useful for cross-component localization or balance). Parameters in `CoupledErrorCovarianceParameters`; factory registration in `instantiateCoupledCovarFactory.h`. Tested via `quenchCoupledErrorCovarianceToolbox` with the `coupled_dirac_id` reference test (registered in `test/testlist/saber_coupled.cmake`).
 
 ## Fortran vs C++ Split
 

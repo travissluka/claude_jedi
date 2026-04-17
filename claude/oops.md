@@ -1,6 +1,6 @@
 # OOPS (Object Oriented Prediction System)
 
-> Last updated against commit `0aa345cc` (2026-04-16). Run `cd bundle/oops && git log --oneline 0aa345cc..HEAD` to see what changed since.
+> Last updated against commit `8c752b37` (2026-04-17). Run `cd bundle/oops && git log --oneline 8c752b37..HEAD` to see what changed since.
 
 ## Overview
 
@@ -41,7 +41,7 @@ Tests defined in `l95/test/CMakeLists.txt`, `qg/test/CMakeLists.txt`, `coupled/t
 | `runs/` | Top-level `Application` subclasses that serve as entry points: `Variational`, `Forecast`, `LocalEnsembleDA`, `HofX3D`, `HofX4D`, `EDA`, etc. Each `Application::execute()` reads a YAML config and runs end-to-end. |
 | `generic/` | Model-independent implementations: `IdentityModel`, `HybridLinearModel`, `AtlasInterpolator`, FFT utilities, HTLM tools. |
 | `util/` | Utilities: `DateTime`, `Duration`, `Logger`, `ConfigFunctions`, MPI helpers, Fortran interop. Includes `Factory.h` (generic factory template with variadic maker args). |
-| `util/redistribution/` | `CommRedistribution` (abstract) for repartitioning ATLAS fields between parent/sub communicators. `CommGatherScatterRedistribution` (concrete, gather-scatter). `CommRedistributionCompatChecker` validates compatibility. |
+| `util/redistribution/` | `CommRedistribution` (abstract) for repartitioning ATLAS fields between parent/sub communicators. Concrete: `CommGatherScatterRedistribution` (gather-scatter) and `CommStraightRedistribution` (direct MPI `allToAllv` with global-index mapping, cached for reuse — uses `detail/AllToAllRouting` helper). `CommRedistributionCompatChecker` validates compatibility. |
 | `mpi/` | MPI communicator management for ensemble/model decomposition. `ColorInfo` analyzes MPI color grouping in split communicators. `Scope` provides RAII temporary communicator switching. |
 | `atlas/` | Atlas-based interpolation wrappers. |
 
@@ -92,7 +92,7 @@ Configured via `local ensemble DA: { solver: "<name>" }`:
 | `Deterministic GETKF` | Generalized ETKF with model-space localization (Lei 2018) |
 | `Stochastic GETKF` | GETKF with perturbed observations |
 
-All 4 solvers use `LocalEnsembleSolver` (iterate over grid points, solve local analysis). The `ObsLocalization::computeLocalization(GeometryIterator, ObsVector)` interface drives observation-space R-localization.
+All 4 solvers use `LocalEnsembleSolver` (iterate over grid points, solve local analysis). The `ObsLocalization::computeLocalization(GeometryIterator, ObsVector)` interface drives observation-space R-localization. Optional **Nerger et al. (2012) regulation factor** for LETKF obs localization: enabled via `local ensemble DA.use nerger regulation: true` (default `false`); applies only to diagonal R; computed per-observation in `LocalEnsembleSolver::computeNergerLocalR()`. Tested with `letkf_nerger_localization` (L95).
 
 ## Cost Functions (5 total)
 

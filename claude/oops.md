@@ -1,6 +1,6 @@
 # OOPS (Object Oriented Prediction System)
 
-> Last updated against commit `d68958af` (2026-04-09). Run `cd bundle/oops && git log --oneline d68958af..HEAD` to see what changed since.
+> Last updated against commit `0aa345cc` (2026-04-16). Run `cd bundle/oops && git log --oneline 0aa345cc..HEAD` to see what changed since.
 
 ## Overview
 
@@ -81,7 +81,7 @@ Three families, all configured via `variational: { algorithm: "<name>" }` in YAM
 
 **DR (Derber-Rosati)** — uses auxiliary variable with B⁻¹x: `DRPCG`, `DRIPCG`, `DRPLanczos`, `DRPBlockLanczos`, `DRPFOM`, `DRGMRESR`, `LBGMRESR`
 
-## Local Ensemble Solvers (5 total)
+## Local Ensemble Solvers (4 total)
 
 Configured via `local ensemble DA: { solver: "<name>" }`:
 
@@ -91,11 +91,8 @@ Configured via `local ensemble DA: { solver: "<name>" }`:
 | `Stochastic LETKF` | LETKF with perturbed observations |
 | `Deterministic GETKF` | Generalized ETKF with model-space localization (Lei 2018) |
 | `Stochastic GETKF` | GETKF with perturbed observations |
-| `EAKF` | Ensemble Adjustment Kalman Filter (Anderson & Collins 2007). Sequential obs-by-obs update. |
 
-The first 4 solvers use `LocalEnsembleSolver` (iterate over grid points, solve local analysis). `EAKF` uses `SequentialEnsembleSolver` (iterate over observations, regress increments onto state via localized sample covariance). Both inherit from `LocalEnsembleSolver` (TODO: refactor into shared `EnsembleSolver` superclass).
-
-The sequential path uses `ObsLocalization::computeLocalization(Point3, Point3)` — a scalar overload returning the localization weight between two arbitrary 3D points (for obs-obs and grid-obs localization). The existing `computeLocalization(GeometryIterator, ObsVector)` overload is unchanged.
+All 4 solvers use `LocalEnsembleSolver` (iterate over grid points, solve local analysis). The `ObsLocalization::computeLocalization(GeometryIterator, ObsVector)` interface drives observation-space R-localization.
 
 ## Cost Functions (5 total)
 

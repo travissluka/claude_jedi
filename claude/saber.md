@@ -1,6 +1,6 @@
 # SABER (System for Atmospheric and Boundary Layer Error Representation)
 
-> Last updated against commit `d36b8903` (2026-04-02). Run `cd bundle/saber && git log --oneline d36b8903..HEAD` to see what changed since.
+> Last updated against commit `8ae1ea2b` (2026-04-16). Run `cd bundle/saber && git log --oneline 8ae1ea2b..HEAD` to see what changed since.
 
 ## Overview
 
@@ -113,7 +113,7 @@ Other OOPS integration:
 
 ## QUENCH Testbed (`quench/`)
 
-Not a block — a pseudo-model for testing SABER blocks with any ATLAS grid. Implements minimal OOPS model types (Geometry, State, Increment, VariableChange) to enable running `ErrorCovarianceToolbox` and `ProcessPerts` without a real atmospheric model. Main executables: `quenchErrorCovarianceToolbox`, `quenchProcessPerts`. Enabled via `ENABLE_QUENCH` CMake option.
+Not a block — a pseudo-model for testing SABER blocks with any ATLAS grid. Implements minimal OOPS model types (Geometry, State, Increment, VariableChange) to enable running `ErrorCovarianceToolbox` and `ProcessPerts` without a real atmospheric model. Main executables: `quenchErrorCovarianceToolbox`, `quenchProcessPerts`, `quenchCoupledErrorCovarianceToolbox` (for testing the coupled covariance; uses `oops::TraitsCoupled<quench::Traits, quench::Traits>`). Enabled via `ENABLE_QUENCH` CMake option.
 
 ## Block Directory Reference
 
@@ -186,6 +186,10 @@ Main block: `FastLAM` (59KB impl). Layer types: `LayerSpec` (spectral), `LayerHa
 ### `interpolation/` — Grid interpolation blocks
 
 `Interpolation`, `GaussToCS` (Gaussian→cubed-sphere), `Rescaling`, `VertProj` (vertical projection). Uses ATLAS interpolation wrappers.
+
+### `coupled/` — Block-diagonal coupled covariance (C++ only)
+
+`CoupledErrorCovariance` implements block-diagonal B for coupled DA (e.g. atmosphere-ocean) built on `oops::TraitsCoupled<TRAIT_1, TRAIT_2>`. Each component has its own error-covariance block configured independently, and an optional **common outer block chain** is applied to the combined state (useful for cross-component localization or balance). Parameters in `CoupledErrorCovarianceParameters`; factory registration in `instantiateCoupledCovarFactory.h`. Tested via `quenchCoupledErrorCovarianceToolbox` with the `coupled_dirac_id` reference test (listed in `saber_test_tier1-coupled.txt`).
 
 ## Fortran vs C++ Split
 

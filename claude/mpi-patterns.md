@@ -132,7 +132,7 @@ After this exchange, each rank interpolates model fields at the obs locations in
 3. Compute perturbations: bkg_pert = members - mean
 4. For each gridpoint (via GeometryIterator):
      - getLocal(): extract local column from each member
-     - Run solver (LETKF/GETKF/EAKF): update perturbations
+     - Run solver (LETKF/GETKF): update perturbations
      - setLocal(): write back updated column
 5. Compute analysis: mean + ana_pert
 ```

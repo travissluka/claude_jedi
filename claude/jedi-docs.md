@@ -1,6 +1,6 @@
 # jedi-docs (JEDI Documentation Repository)
 
-> Last updated against commit `6decc9e5` (2026-04-09). Run `cd bundle/jedi-docs && git log --oneline 6decc9e5..HEAD` to see what changed since.
+> Last updated against commit `91e03357` (2026-04-16). Run `cd bundle/jedi-docs && git log --oneline 91e03357..HEAD` to see what changed since.
 
 > **WARNING**: The developers do NOT consistently keep jedi-docs up to date with the code. If there is a discrepancy between what jedi-docs says and what the code does, **trust the code**. Use jedi-docs for conceptual understanding and workflow guidance, but always verify specifics against the actual source.
 

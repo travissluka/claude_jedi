@@ -69,7 +69,6 @@ SABER also provides `Localization<MODEL>` for ensemble methods (same FieldSet co
 | `ObsSpace` | **ioda** | Observation data container, file I/O, MPI distribution |
 | `ObsVector` | **ioda** | Vector of observation values |
 | `ObsDataVector<T>` | **ioda** | Templated observation data |
-| `ObsIterator` | **ioda** | Iterator over observations |
 | `ObsOperator` | **ufo** | Forward operator H(x) |
 | `LinearObsOperator` | **ufo** | TL/AD of H(x) |
 | `GeoVaLs` | **ufo** | Model state at obs locations |
@@ -175,7 +174,6 @@ Execution:
 | YAML config schema | Tests in the affected repo; possibly downstream model repo tests |
 | CRTM coefficient files or API | ufo CRTM operators; all model repo radiance tests |
 | oops coupled types (GeometryCoupled, etc.) | coupling repo; soca+fv3-jedi coupled tests |
-| oops `ObsLocalization::computeLocalization(Point3, Point3)` | All model-specific obs localization implementations (ufo, pyiri-jedi, soca). Required for sequential EnKF. |
 
 ## C++/Fortran Interop Patterns (Shared Across Repos)
 

@@ -1,6 +1,6 @@
 # SOCA (Sea-ice, Ocean, and Coupled Assimilation)
 
-> Last updated against commit `9d89b9da` (2026-04-09). Run `cd bundle/soca && git log --oneline 9d89b9da..HEAD` to see what changed since.
+> Last updated against commit `3bf226dd` (2026-03-30). Run `cd bundle/soca && git log --oneline 3bf226dd..HEAD` to see what changed since.
 
 ## Overview
 
@@ -116,7 +116,7 @@ These are used in SABER outer block chains for ocean error covariance modeling.
 
 ### Obs Localization (`ObsLocalization/`)
 
-`ObsLocRossby` — custom localization registered as `"Rossby"`. Inherits from `ufo::ObsHorLocGC99<GeometryIterator>` and scales the Gaspari-Cohn localization radius by the local Rossby radius of deformation. Has a stub `computeLocalization(Point3, Point3)` that throws ABORT (Rossby-based localization needs `GeometryIterator::getFieldValue()` which doesn't work for obs-obs point pairs — sequential EnKF support requires rework).
+`ObsLocRossby` — custom localization registered as `"Rossby"`. Inherits from `ufo::ObsHorLocGC99<GeometryIterator>` and scales the Gaspari-Cohn localization radius by the local Rossby radius of deformation.
 
 ## Fortran Interop
 
@@ -178,4 +178,4 @@ ctest -N -R soca
 
 95+ YAML test configs in `test/testinput/`. 14 test executables in `test/executables/` covering Geometry, GeometryIterator, GetValues, State, Increment, LinearModel, VariableChange, ObsLocalization, and more. Reference outputs in `test/testref/`. Test data in `test/Data/` (36x17x25 and 72x35x25 ocean grids with MOM6 restarts).
 
-Test categories: variational DA (3dvar, 3dhyb, 4dvar), ensemble methods (letkf, getkf, eakf), forecasts, H(x), linear model, variable transforms, diagnostics (dirac), ensemble utilities, ML balance training.
+Test categories: variational DA (3dvar, 3dhyb, 4dvar), ensemble methods (letkf, getkf), forecasts, H(x), linear model, variable transforms, diagnostics (dirac), ensemble utilities, ML balance training.

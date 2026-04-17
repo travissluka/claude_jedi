@@ -1,6 +1,6 @@
 # FV3-JEDI
 
-> Last updated against commit `15ee4395` (2026-04-09). Run `cd bundle/fv3-jedi && git log --oneline 15ee4395..HEAD` to see what changed since.
+> Last updated against commit `9ddb5c5f` (2026-04-14). Run `cd bundle/fv3-jedi && git log --oneline 9ddb5c5f..HEAD` to see what changed since.
 
 ## Overview
 

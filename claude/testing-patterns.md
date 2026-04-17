@@ -112,18 +112,68 @@ SOCA wraps `ecbuild_add_test` in `soca_add_test()` which:
 2. Symlinks `data_static/`, `data_generated/`, `testinput/`, `testref/`
 3. Prevents parallel test output conflicts
 
-## SABER Tier System
+## Tier System (Bundle-wide Standardization, 2026)
 
-SABER uses tiers for test categorization:
+Most repos have converged on a **label-based** tier system:
 
-| Tier | Tests | OpenMP |
-|------|-------|--------|
-| 1 (default) | MPI-only, fast baseline | Off |
-| 2 | MPI + OpenMP, extended | On |
+| Tier | Marker | When it runs |
+|------|--------|--------------|
+| 1 (default) | no label (implicit) | Every CI run; fast baseline |
+| 2 | `LABELS tier2` | Nightly / extended; slow tests, coding norms, extra-detail checks |
 
-Controlled by `SABER_TEST_TIER` env variable or CMake variable. Tests listed in `testlist/saber_test_tier1.txt` and `testlist/saber_test_tier2.txt`.
+Register with:
+```cmake
+ecbuild_add_test( TARGET   <repo>_<name>
+                  COMMAND  <executable>
+                  LABELS   tier2 )
+```
 
-Multiple MPI/OMP combinations generated automatically for each test (1/1, 2/1, 4/1, 1/2).
+Filter with CTest:
+```bash
+ctest -L tier2              # run only tier2
+ctest -LE tier2             # exclude tier2 (i.e., tier1 only)
+```
+
+**Repos using labels**: oops, ufo, ioda, vader, fv3-jedi, mpas-jedi, pyiri-jedi, soca, coupling. `FV3JEDI_TEST_TIER` env variable was removed in favor of labels.
+
+**Coding-norms tests are tier2** by convention (they're slow and run nightly, not per-commit).
+
+### Other bundle-wide labels
+
+| Label | Purpose |
+|-------|---------|
+| `tier2` | Extended / nightly tests |
+| `ci_oneapi_disable` | Tests to skip on the Intel oneAPI CI runner (fv3-jedi, mpas-jedi) — replaced older `CI_exclude_fv3jedi` |
+| `ufo_data_validate` | UFO data-validation-only tests |
+
+### Test name prefix standardization
+
+Test names now start with the repo slug (no `test_` prefix, no `tier1_` in the name since tier is expressed via labels):
+
+| Repo | Prefix |
+|------|--------|
+| oops | `oops_` |
+| ioda | `ioda_` |
+| ufo | `ufo_` |
+| saber | `saber_` |
+| vader | `vader_` |
+| fv3-jedi | `fv3jedi_` |
+| mpas-jedi | `mpasjedi_` |
+| pyiri-jedi | `pyirijedi_` |
+| soca | `soca_` |
+| coupling | `coupling_` |
+
+### SABER exception: testlist-file approach
+
+SABER still uses **file-based tier lists** (not labels) because it expands each test over multiple MPI/OMP combinations. Tier files under `saber/test/testlist/`:
+- `saber_test_tier1-bump.txt`, `saber_test_tier1-bump-spectralb.txt`
+- `saber_test_tier1-bifourier.txt`, `-bifourier-ectrans.txt`
+- `saber_test_tier1-fastlam.txt`, `-fastlam-fftw.txt`, `-fastlam-regional_interpolation.txt`
+- `saber_test_tier1-gsi-geos.txt`
+- `saber_test_tier1-coupled.txt` (new: coupled covariance tests)
+- `saber_test_tier2.txt`
+
+Controlled by `SABER_TEST_TIER` env/CMake variable. Tier 1 = MPI-only; tier 2 = MPI + OpenMP. Each listed test is generated for multiple MPI/OMP combinations (1/1, 2/1, 4/1, 1/2).
 
 ## Adjoint Tests (Dot-Product Test)
 

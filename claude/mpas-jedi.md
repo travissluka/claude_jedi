@@ -1,6 +1,6 @@
 # MPAS-JEDI
 
-> Last updated against commit `b4f5df3b` (2026-04-09). Run `cd bundle/mpas-jedi && git log --oneline b4f5df3b..HEAD` to see what changed since.
+> Last updated against commit `deaba55b` (2026-04-10). Run `cd bundle/mpas-jedi && git log --oneline deaba55b..HEAD` to see what changed since.
 
 ## Overview
 

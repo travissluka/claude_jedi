@@ -1,6 +1,6 @@
 # PyIRI-JEDI
 
-> Last updated against commit `71c054b0` (2026-04-09). Run `cd bundle/pyiri-jedi && git log --oneline 71c054b0..HEAD` to see what changed since.
+> Last updated against commit `dfb0b900` (2026-04-16). Run `cd bundle/pyiri-jedi && git log --oneline dfb0b900..HEAD` to see what changed since.
 
 ## Overview
 
@@ -79,8 +79,8 @@ Both expose Python interfaces via CFFI builders in `python/pyiri_jedi/`.
 - `ObsOpPointPyiri` — point observations at arbitrary locations
 - `ObsOpVtecPyiri` — Vertical Total Electron Content integration
 - `ObsOperatorTLAD` — tangent linear/adjoint operators
-- `ObsSpacePyiri`, `ObsVecPyiri`, `ObsDataPyiri` — obs containers. `ObsSpacePyiri` has `begin()`/`end()` returning `ObsIterator` stubs (not yet fully implemented).
-- `ObsLocNull` — null obs localization; `computeLocalization(Point3, Point3)` stub returns 1.0
+- `ObsSpacePyiri`, `ObsVecPyiri`, `ObsDataPyiri` — obs containers
+- `ObsLocNull` — null obs localization (returns 1.0)
 - `ObsErrorPyiri` — observation error covariance
 - `ObsFilter` — QC filtering
 - `GeoValsPyiri` — geo-referenced values at obs locations

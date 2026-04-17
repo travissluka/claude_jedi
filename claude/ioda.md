@@ -1,6 +1,6 @@
 # IODA (JEDI Interface for Observation Data Access)
 
-> Last updated against commit `a0702a36` (2026-04-09). Run `cd bundle/ioda && git log --oneline a0702a36..HEAD` to see what changed since.
+> Last updated against commit `b2fa4e92` (2026-04-16). Run `cd bundle/ioda && git log --oneline b2fa4e92..HEAD` to see what changed since.
 
 ## Overview
 
@@ -55,7 +55,6 @@ Reader/Writer factory pattern: `ReaderBase`/`WriterBase` with `ReaderFactory`/`W
 - `ioda::ObsSpace` — main class; extends `oops::ObsSpaceBase`; manages the full lifecycle of obs data in a DA run (read on construction, optional write on destruction)
 - `ioda::ObsVector` — observation vector for DA algorithms
 - `ioda::ObsDataVector<T>` — templated obs data container
-- `ioda::ObsIterator` — forward iterator over observation locations (used by sequential EnKF). Constructed via `ObsSpace::begin()`/`end()`, dereferences to `eckit::geometry::Point3(lon, lat, 0)`. Lazy-initializes lat/lon arrays on first access to avoid unnecessary DB reads.
 - `ioda::Distribution` (`src/distribution/`) — MPI distribution strategies: `RoundRobin`, `Halo`, `InefficientDistribution`, etc.
 - `ioda::IoPool` (`src/ioPool/`) — parallel I/O pool management; decouples MPI ranks from I/O tasks
 - `src/containers/` — OSDF (Observation Space Data Format) container classes under `namespace osdf`: `IFrame`, `FrameCols`, `FrameRows`, `FrameMetadata`, `Data<T>`, etc.

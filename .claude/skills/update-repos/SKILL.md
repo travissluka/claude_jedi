@@ -20,6 +20,8 @@ allowed-tools:
 
 Sync JEDI bundle repositories, analyze recent changes, update architecture docs, and summarize impact.
 
+Two helper scripts in `scripts/` collapse dozens of per-repo git calls into two batched invocations. Use them — do NOT loop over repos with individual Bash tool calls.
+
 ## Parse Arguments
 
 Parse `$ARGUMENTS` for:
@@ -30,36 +32,40 @@ Parse `$ARGUMENTS` for:
 
 ## Configuration
 
+All paths are resolved relative to the project root (where `.claude/` and `bundle/` live). The Claude Code session's CWD is the project root, so relative paths work as-is.
+
 ```
-BUNDLE_ROOT=/home/tsluka/work/jedi/bundle
-DOCS_ROOT=/home/tsluka/work/jedi/claude
-PROJECT_ROOT=/home/tsluka/work/jedi
+SCRIPTS=.claude/skills/update-repos/scripts
+bundle dir:  bundle/
+docs dir:    claude/
 ```
+
+The scripts auto-detect the project root from their own location. Override with `PROJECT_ROOT`, `BUNDLE_ROOT`, or `DOCS_ROOT` env vars if needed.
 
 ### Repo categories
 
-**Documented repos** (have `claude/<repo>.md`):
-oops, ioda, ufo, saber, vader, fv3-jedi, mpas-jedi, pyiri-jedi, jedi-docs
+**Documented repos** (have `claude/<repo>.md`, analyzed in Phase 2):
+`oops ioda ufo saber vader fv3-jedi mpas-jedi pyiri-jedi jedi-docs`
 
-**Special doc**: `cross-repo-interactions.md` — not tied to a single repo, update only when multiple repos have cross-cutting API changes.
+**Undocumented source repos** (sync only, report activity):
+`soca coupling`
+
+**External repos** (sync only, do NOT analyze for doc updates):
+`gsw crtm mpas fv3-jedi-lm`
 
 **Data repos** (SKIP entirely — large, rarely relevant):
-ioda-data, ufo-data, fv3-jedi-data, mpas-jedi-data, jedi-model-data, test-data-release
+`ioda-data ufo-data fv3-jedi-data mpas-jedi-data jedi-model-data test-data-release`
 
-**External repos** (sync but do NOT analyze for doc updates):
-gsw, crtm, mpas, fv3-jedi-lm
-
-**Undocumented repos** (check for activity, report only):
-soca, coupling, and anything else in bundle/ not listed above
+**Special doc**: `cross-repo-interactions.md` — update only when multiple repos have cross-cutting API changes.
 
 ### Doc header format
 
-Each `claude/<repo>.md` file has this on line 3:
+Each `claude/<repo>.md` has on line 3:
 ```
 > Last updated against commit `<hash>` (<date>). Run `cd bundle/<repo> && git log --oneline <hash>..HEAD` to see what changed since.
 ```
 
-The `cross-repo-interactions.md` file uses a date instead of per-repo commit hashes.
+`cross-repo-interactions.md` uses a date instead of per-repo hashes.
 
 ---
 
@@ -67,176 +73,200 @@ The `cross-repo-interactions.md` file uses a date instead of per-repo commit has
 
 **Skip if `--no-pull` or `--docs-only` is set.**
 
-For each repo in bundle/ (excluding data repos), filtering to user-specified repos if any:
-
-### Pre-flight checks (per repo)
-
-1. Verify `.git` directory exists. Skip non-repo entries (CMakeLists.txt, LICENSE, etc.).
-2. Check for uncommitted changes: `git -C <path> status --porcelain`
-   - If dirty: **report** the dirty files but do NOT stash or clean. Skip sync for this repo but still analyze it in Phase 2.
-3. Detect current branch: `git -C <path> rev-parse --abbrev-ref HEAD`
-   - If `HEAD` (detached): **report** and skip sync.
-
-### Sync logic
-
-4. `git -C <path> fetch origin`
-   - On network failure: report error, continue to next repo.
-5. **On `develop` branch**: `git -C <path> pull --ff-only origin develop`
-   - If ff-only fails (diverged history): report and skip. Do NOT force-merge.
-6. **On a feature branch**: `git -C <path> merge origin/develop --no-edit`
-   - If merge conflicts: immediately run `git -C <path> merge --abort`, report the conflicting files, continue to next repo.
-   - **NEVER leave a repo in a conflicted state.**
-
-### Sync output
-
-Collect results into a table and display:
+Call the sync script **once** with the full list of source repos (documented + undocumented + external, excluding data repos):
 
 ```
-| Repo | Branch | Action | Result |
-|------|--------|--------|--------|
-| oops | feature/sequential_enkf | merge origin/develop | OK (3 new commits) |
-| ioda | develop | pull --ff-only | OK (up to date) |
-| saber | develop | pull --ff-only | OK (7 new commits) |
-| fv3-jedi | HEAD (detached) | skipped | detached HEAD |
+.claude/skills/update-repos/scripts/sync.sh oops ioda ufo saber vader fv3-jedi mpas-jedi pyiri-jedi jedi-docs soca coupling gsw crtm mpas fv3-jedi-lm
 ```
+
+Filter the repo list to user-specified repos if any were passed.
+
+The script emits TSV: `repo  branch  dirty  action  result  details`. Parse it into the sync-results table.
+
+**What the script handles for you** (do NOT call these directly):
+- `.git` presence check → `skipped / no .git directory`
+- Dirty working tree → `skipped / dirty working tree` (leaves tree untouched)
+- Detached HEAD → `skipped / detached HEAD`
+- Fetch failure → `failed / fetch error (network?)`
+- `develop` branch: `git pull --ff-only origin develop`; diverged → `failed / diverged (ff-only refused)`
+- Feature branch: `git merge origin/develop --no-edit`; conflict → auto-`merge --abort` and report `conflict / aborted`
+
+**Safety rules** (already enforced by the script): never `reset --hard`, never `stash`, never leave a repo in a conflicted state, never force-push.
+
+If a repo reports a conflict or dirty state, report it to the user in the Phase 4 summary action items — do not try to resolve it automatically.
 
 ---
 
 ## Phase 2: Analyze Changes
 
-For each documented repo (filtered by user args if specified):
+Call the analyze script **once** with the list of documented repos:
 
-1. Read the first 3 lines of `claude/<repo>.md` to extract the stored commit hash (the 8-char hex inside backticks after "commit").
-2. Get current HEAD: `git -C bundle/<repo> rev-parse --short=8 HEAD`
-3. If stored hash == current HEAD prefix: report "no changes", move on.
-4. Run: `git -C bundle/<repo> log --oneline <stored-hash>..HEAD`
-5. Run: `git -C bundle/<repo> diff --stat <stored-hash>..HEAD`
+```
+.claude/skills/update-repos/scripts/analyze.sh oops ioda ufo saber vader fv3-jedi mpas-jedi pyiri-jedi jedi-docs
+```
 
-### Categorize changes by significance
+(Filter to user-specified repos if any were passed.)
+
+The script emits a block per repo:
+```
+==REPO <name> stored=<h1> head=<h2> commits=<n> class=<label> STATUS=<s>==
+--LOG--
+<git log --oneline>
+--STAT--
+<git diff --stat>
+```
+
+### STATUS values
+
+- `no-changes` — stored hash == HEAD. Skip, no doc work needed.
+- `changed` — there are new commits. Read the LOG and STAT.
+- `hash-not-found` — stored hash not in repo (amended/force-pushed history). Report and ask user.
+- `no-doc` / `parse-error` / `repo-error` — report as action item.
+
+### class values (auto-classification from changed file list)
+
+Use these to decide whether to deep-dive or just bump the hash:
+
+| class | meaning | default action |
+|-------|---------|----------------|
+| `test-only` | only files under `test/` | bump hash only |
+| `build-only` | only `CMakeLists.txt`/`*.cmake` | bump hash only |
+| `docs-only` | only `*.md`/`*.rst`/`*.txt` | bump hash only |
+| `fortran-only` | only `*.F90`/`*.f90` | bump hash unless commit messages suggest new functionality (not compiler-compat) |
+| `code` | touches `*.h`/`*.hpp`/`*.cc`/`*.cpp` or mixed | **deep-dive required** — read the actual diff |
+
+**Do not guess for `class=code`.** You must look at the actual changes (see Phase 3a) before deciding whether the doc needs content updates.
+
+### Categorize significance (for `class=code`)
 
 From most to least significant:
-- **API changes**: New/modified public class interfaces, changed function signatures, renamed/removed classes
-- **New classes/files**: Entirely new source files added
-- **Config changes**: New YAML keys, changed parameter names, new factory-registered types
-- **Test changes**: New or modified tests (may indicate new features being tested)
-- **Build changes**: CMakeLists.txt, ecbuild config changes
-- **Documentation only**: README, comments, inline docs
-- **Minor**: Formatting, typos, internal refactoring with no API impact
+- **API changes**: public class interfaces, changed function signatures, renamed/removed classes
+- **New classes/files**: entirely new source files
+- **Config changes**: new YAML keys, changed parameter names, new factory-registered types
+- **Internal refactor**: implementation changes with no public API impact
+- **Minor**: formatting, typos
 
-A repo has **significant changes** if it has anything in the first 4 categories.
+A repo has **significant changes** if it has anything in the first 3 categories.
 
-### Undocumented repos
+### Undocumented source repos
 
-For repos not in the "data" or "external" categories that also lack a `claude/*.md` file, run `git -C bundle/<repo> log --oneline -5` to capture recent activity. Note these in the summary.
+For repos not in the documented list (e.g., `soca`, `coupling`), grab recent activity with a single call if relevant:
+
+```
+git -C bundle/<repo> log --oneline -5
+```
+
+Only bother if the Phase 1 table showed new commits for that repo.
 
 ### CLAUDE.md check
 
-Also check whether changes affect the main `CLAUDE.md`:
-- Build dependency order changes (new repos, changed deps)
+Check whether changes affect the main `CLAUDE.md`:
+- Build dependency order changes (new repos, changed deps in `bundle/CMakeLists.txt`)
 - New repos added to or removed from the bundle
-- Test count changes (if easy to determine)
-- Any structural changes to the project layout
+- Structural changes to project layout
+
+Only dig in if Phase 1 reported new commits in repos whose `CMakeLists.txt` or bundle-level config changed.
 
 ---
 
 ## Phase 3: Update Docs
 
 **Skip if `--no-docs` is set.**
-**Skip repos with no significant changes.**
+**Skip repos with `STATUS=no-changes` or non-`code` class unless commits suggest new functionality.**
 
-### 3a. Understand the changes
+### 3a. Deep-dive only `class=code` repos
 
-For each repo with significant changes, read the relevant source files to understand what changed:
-- New or modified files listed in the diffstat
-- For new classes: read the header file to understand the public interface
-- For API changes: compare the current doc description with the new code
-- For config changes: find example YAML configs
+For each repo where content updates might be needed:
+- Read the header file(s) touched: `git -C bundle/<repo> diff <stored>..HEAD -- <path/to/file.h>`
+- Compare against the current `claude/<repo>.md` description
+- For new classes, read the new header to extract the public interface
+- For config changes, find example YAML configs
 
-Use `git -C bundle/<repo> diff <stored-hash>..HEAD -- <file>` for specific files when needed.
+**Parallelize with agents when 2+ repos need deep-dives.** Single prompt template:
 
-Use Agent subagents to parallelize analysis across repos when multiple repos have significant changes.
+> Read the diff between `<stored-hash>` and HEAD in `bundle/<repo>` (focus on headers and any new files). Compare against the current `claude/<repo>.md`. Return a bulleted list of proposed edits (section + specific change + why) under 150 words. If nothing substantive changed, return "no content updates needed."
+
+For 0–1 repos with code changes, do it directly in the main thread — agent overhead isn't worth it.
 
 ### 3b. Draft updates
 
-For each repo, draft the specific targeted edits:
+For each repo, draft specific targeted edits:
 - New sections to add
 - Existing sections to modify
-- Outdated information to remove or correct
-- The updated commit hash and date for the header line
+- Outdated information to correct
+- Updated commit hash + today's date for the header line
 
-Also draft any CLAUDE.md edits if relevant.
+Also draft any `CLAUDE.md` edits if relevant.
 
 ### 3c. Present for review
 
-**BEFORE making any edits**, present ALL proposed changes to the user in this format:
+**BEFORE making any edits**, present ALL proposed changes:
 
 ```
 ### Proposed Doc Updates
 
-**oops.md** (12 new commits since 792d377a):
+**oops.md** (12 new commits since 792d377a, class=code):
 - Add new `SequentialEnsembleSolver` class to "Ensemble Solvers" section
 - Update solver count from 6 to 7
-- Update commit hash to `abc12345` (2026-03-31)
+- Bump hash: `792d377a` → `abc12345` (<today>)
 
-**ufo.md** (3 new commits since 5fd433e2):
+**ufo.md** (3 new commits since 5fd433e2, class=code):
 - Add `computeLocalization(Point3, Point3)` overload to obs localization section
-- Update commit hash to `def67890` (2026-03-31)
+- Bump hash: `5fd433e2` → `def67890` (<today>)
 
-**CLAUDE.md**:
-- No changes needed
+**Hash-only bumps** (no content changes):
+- ioda.md: `aaa..bbb` (class=test-only)
+- saber.md: `ccc..ddd` (class=build-only)
 
-**No changes needed**: saber.md, vader.md, fv3-jedi.md
-**No changes detected**: jedi-docs.md, pyiri-jedi.md
+**No changes needed**: vader.md, fv3-jedi.md
+**No new commits**: jedi-docs.md, pyiri-jedi.md, mpas-jedi.md
+
+**CLAUDE.md**: No changes needed
 
 Proceed with these updates?
 ```
 
-Wait for user confirmation. If the user wants to modify the proposals, adjust accordingly.
+Wait for user confirmation.
 
 ### 3d. Apply updates
 
 Use the **Edit** tool for targeted changes. Do NOT rewrite entire files. For each file:
-1. Update the commit hash and date on the header line (line 3)
+1. Update the commit hash and date on line 3
 2. Apply the specific section edits as proposed and approved
 
 ### 3e. cross-repo-interactions.md
 
-If changes span multiple repos and affect cross-repo interfaces (e.g., new oops abstract interface that model repos must implement), propose updates to `cross-repo-interactions.md` as well. Update its date line.
+If changes span multiple repos and affect cross-repo interfaces (e.g., a new `oops` abstract interface that model repos must implement), propose updates to `cross-repo-interactions.md` as well. Update its date line.
 
 ---
 
 ## Phase 4: Summary Report
-
-Present a final summary:
 
 ```
 ## JEDI Bundle Update Summary (<today's date>)
 
 ### Git Sync Results
 | Repo | Branch | Status |
-|------|--------|--------|
 | ... | ... | ... |
 
 ### Changes Since Last Doc Update
-| Repo | Commits | Significance | Key Changes | Doc Updated? |
-|------|---------|-------------|-------------|--------------|
-| oops | 12 | API changes | SequentialEnsembleSolver, EAKF | Yes |
-| ufo | 3 | Config | Point3 obs localization | Yes |
-| saber | 0 | — | (no changes) | — |
+| Repo | Commits | Class | Significance | Key Changes | Doc Updated? |
+| oops | 12 | code | API changes | SequentialEnsembleSolver | Yes |
+| ioda | 1 | test-only | minor | test rename | Hash only |
+| saber | 0 | — | — | (no changes) | — |
 
 ### Impact on Active Projects
-
 Cross-reference with `claude/active-projects.md`:
 - For each active project, list which repos changed and how
 - Highlight anything that could cause regressions or require adaptation
-- Note if feature branches were updated with new develop commits
+- Note if feature branches absorbed new develop commits via merge
 
 ### Repos Without .claude Docs
-- soca: X commits (brief summary)
-- coupling: X commits (brief summary)
+- soca: X new commits (brief summary)
+- coupling: X new commits (brief summary)
 
 ### Action Items
-- [ ] Resolve merge conflict in <repo> (if any)
+- [ ] Resolve merge conflict in <repo> (if any from Phase 1)
 - [ ] Review <repo> changes for <project> impact
 - [ ] Consider adding claude/<repo>.md (if significant undocumented changes)
 ```
@@ -245,18 +275,27 @@ Cross-reference with `claude/active-projects.md`:
 
 ## Error Handling
 
-- **Network failures** (git fetch): Log error, mark repo as "fetch failed", continue.
-- **Merge conflicts**: `git merge --abort` immediately, report conflicting files, continue.
-- **Dirty working tree**: Report dirty files, skip sync for that repo, still analyze in Phase 2.
-- **Detached HEAD**: Report, skip sync, still analyze.
-- **Missing repo directory**: Report and continue.
-- **Unparseable doc header**: Report the parsing issue, skip that repo's analysis.
-- **No changes anywhere**: Report "All repos up to date, no doc updates needed" and exit.
+Most error cases are handled by the scripts themselves; the main thread's job is to parse the structured output and report in Phase 4.
+
+- **Network failures** (fetch): sync.sh reports `failed / fetch error`; continue
+- **Merge conflicts**: sync.sh auto-aborts and reports `conflict / aborted`; add to action items
+- **Dirty working tree**: sync.sh reports and skips; add to action items
+- **Detached HEAD**: sync.sh reports and skips; still run analyze.sh (it reads HEAD regardless)
+- **Stored hash missing from history** (`STATUS=hash-not-found`): amended/force-pushed. Ask the user rather than guessing a replacement.
+- **Unparseable doc header** (`STATUS=parse-error`): report, skip analysis
+- **No changes anywhere**: report "All repos up to date, no doc updates needed" and exit
 
 ## Safety Rules
 
-- NEVER leave a repo in a conflicted state
-- NEVER force-push, stash, reset --hard, or clean
-- NEVER create merge commits on the develop branch (use --ff-only)
-- Always report per-repo errors but continue the overall operation
-- Always get user approval before writing doc changes
+- NEVER leave a repo in a conflicted state (scripts handle this via `merge --abort`)
+- NEVER force-push, stash, `reset --hard`, or clean
+- NEVER create merge commits on `develop` (scripts use `pull --ff-only`)
+- Always get user approval before writing doc content changes
+- Hash-only bumps can be applied as part of a bundled approval — do not ask separately for each
+
+## Do NOT
+
+- Loop over repos with individual Bash tool calls — use `sync.sh` and `analyze.sh`
+- Run `git fetch`, `git status`, or `git log` per repo from the main thread when the scripts can batch it
+- Deep-dive into diffs for `class=test-only`, `build-only`, `docs-only`
+- Spawn agents when there are 0–1 `class=code` repos to review

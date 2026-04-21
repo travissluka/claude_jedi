@@ -1,6 +1,6 @@
 # OOPS (Object Oriented Prediction System)
 
-> Last updated against commit `8c752b37` (2026-04-17). Run `cd bundle/oops && git log --oneline 8c752b37..HEAD` to see what changed since.
+> Last updated against commit `2c466b91` (2026-04-21). Run `cd bundle/oops && git log --oneline 2c466b91..HEAD` to see what changed since.
 
 ## Overview
 

@@ -1,6 +1,6 @@
 # IODA (JEDI Interface for Observation Data Access)
 
-> Last updated against commit `b2fa4e92` (2026-04-16). Run `cd bundle/ioda && git log --oneline b2fa4e92..HEAD` to see what changed since.
+> Last updated against commit `1af6b6d8` (2026-04-21). Run `cd bundle/ioda && git log --oneline 1af6b6d8..HEAD` to see what changed since.
 
 ## Overview
 
@@ -52,7 +52,8 @@ Storage backends (engines):
 Reader/Writer factory pattern: `ReaderBase`/`WriterBase` with `ReaderFactory`/`WriterFactory` for engine selection at runtime.
 
 **`ioda`** (`src/`) — Higher-level JEDI/oops interface:
-- `ioda::ObsSpace` — main class; extends `oops::ObsSpaceBase`; manages the full lifecycle of obs data in a DA run (read on construction, optional write on destruction)
+- `ioda::ObsSpace` — main class; extends `oops::ObsSpaceBase`; manages the full lifecycle of obs data in a DA run (read on construction, optional write on destruction). Exposes `begin()`/`end()` returning `ioda::ObsIterator` for location-based traversal.
+- `ioda::ObsIterator` — forward iterator over obs locations; dereferences to `eckit::geometry::Point3(lon, lat, 0)`. Aliased as `IodaTrait::GeometryIterator` and used by oops sequential/local ensemble solvers for obs-obs and grid-obs localization.
 - `ioda::ObsVector` — observation vector for DA algorithms
 - `ioda::ObsDataVector<T>` — templated obs data container
 - `ioda::Distribution` (`src/distribution/`) — MPI distribution strategies: `RoundRobin`, `Halo`, `InefficientDistribution`, etc.

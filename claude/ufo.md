@@ -1,6 +1,6 @@
 # UFO (Unified Forward Operators)
 
-> Last updated against commit `17930e3b` (2026-04-16). Run `cd bundle/ufo && git log --oneline 17930e3b..HEAD` to see what changed since.
+> Last updated against commit `6f9a4f60` (2026-04-21). Run `cd bundle/ufo && git log --oneline 6f9a4f60..HEAD` to see what changed since.
 
 ## Overview
 

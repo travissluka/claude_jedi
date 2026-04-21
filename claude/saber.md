@@ -1,6 +1,6 @@
 # SABER (System for Atmospheric and Boundary Layer Error Representation)
 
-> Last updated against commit `2a1c6143` (2026-04-16). Run `cd bundle/saber && git log --oneline 2a1c6143..HEAD` to see what changed since.
+> Last updated against commit `8fc98110` (2026-04-21). Run `cd bundle/saber && git log --oneline 8fc98110..HEAD` to see what changed since.
 
 ## Overview
 

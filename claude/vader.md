@@ -1,6 +1,8 @@
 # VADER (The VAriable DErivation Repository)
 
 > Last updated against commit `0605133a` (2026-04-02). Run `cd bundle/vader && git log --oneline 0605133a..HEAD` to see what changed since.
+>
+> **Covers:** Vader, RecipeBase, DefaultCookbook, VaderParameters, planVariable algorithm, _A/_B/_C recipe variants, changeVar/changeVarTraj/changeVarTL/changeVarAD, AirTemperature, DryAirDensity, HydrostaticPressure, RelativeHumidity, MoistureControl, Met Office SVP lookup tables (`src/mo/`), GSW OceanConversions, adjoint dot-product test pattern, adding a new recipe.
 
 ## Overview
 
@@ -8,18 +10,7 @@ C++/Fortran library for composable variable transformations within JEDI. Source 
 
 VADER uses a **Recipe/Cookbook** metaphor: a **Recipe** transforms input variables (ingredients) into a single output variable (product). A **Cookbook** maps output variable names to available recipes. VADER's planning algorithm automatically discovers dependency chains to produce requested variables from available inputs.
 
-## Build
-
-```bash
-# From build directory
-make vader
-
-# Tests
-ctest --output-on-failure -R vader
-ctest -N -R vader   # List tests
-```
-
-Dependencies: oops ≥1.10.0, atlas, NetCDF, Boost ≥1.64, MPI. Optional: GSW (enables ocean recipes), OpenMP.
+Build/test quirks in `claude/build-and-test.md`. GSW is the only unique optional dep (enables ocean recipes).
 
 ## Core Architecture
 
@@ -162,31 +153,17 @@ Key patterns:
 - **Fortran**: Met Office lookup tables and physics (`src/mo/`), ocean conversions via GSW (`src/OceanConversions/`)
 - **Interop**: `OceanConversions.interface.h` / `.F90` pairs using ISO_C_BINDING
 
-## Tests
+## Test YAML pattern
 
-```bash
-ctest --output-on-failure -R vader_recipe   # Individual recipe tests
-ctest --output-on-failure -R vader_vader    # Integration tests
-ctest --output-on-failure -R vader_planvariable  # Planning algorithm
-```
-
-Test structure:
-- `test/testinput/recipe_*.yaml` — individual recipe tests (~29 files)
-- `test/testinput/vader_*.yaml` — integration tests (~27 files)
-- `test/testdata/` — NetCDF trajectory data (symlinked from jedi-model-data)
-
-Recipe test YAML pattern:
 ```yaml
 recipe:
   recipe name: DryAirDensity_A
-trajectory grid:
-  type: regular_gaussian
-  N: 12
+trajectory grid: { type: regular_gaussian, N: 12 }
 trajectory filename: testdata/gauss_state_F12.nc
 adjoint test tolerance: 1.e-12
 ```
 
-Tests verify: NL execution correctness, adjoint consistency (dot product test), and planning algorithm.
+Test groups (`vader_recipe_*`, `vader_vader_*`, `vader_planvariable_*`) verify NL correctness, adjoint consistency (dot-product test), and the planning algorithm.
 
 ## Cross-Repo Usage
 

@@ -1,33 +1,14 @@
 # FV3-JEDI
 
 > Last updated against commit `66485a3a` (2026-04-20). Run `cd bundle/fv3-jedi && git log --oneline 66485a3a..HEAD` to see what changed since.
+>
+> **Covers:** fv3jedi::Traits, fv3jedi::{Geometry,State,Increment,Model,LinearModel,VariableChange,LinearVariableChange,ModelBias,ModelData}, FV3_FORECAST_MODEL backends (GEOS/UFS/FV3CORE), cubed-sphere geometry, LAM support, FV3LM linear model, GFS/GEOS I/O backends, FV3-JEDI/FMS interop, opaque-handle Fortran pattern.
 
 ## Overview
 
 Interface between JEDI and FV3-based models (GEOS, GFS, UFS). Supports global and LAM (Limited Area Model) domains on cubed-sphere geometry. Source at `bundle/fv3-jedi/`. Version 1.9.0. C++17/Fortran 2008.
 
-## Build
-
-```bash
-# From build directory
-make fv3-jedi
-
-# CMake options
-# FV3_FORECAST_MODEL: GEOS | UFS | FV3CORE
-# FV3_PRECISION: DOUBLE (default) | SINGLE
-# OPENMP: ON (default)
-```
-
-Dependencies: oops ≥1.10.0, saber ≥1.10.0, ufo ≥1.10.0, atlas ≥0.35.0, vader ≥1.7.0, fv3-jedi-lm ≥1.5.0, FMS 2023.04, NetCDF, MPI. Optional: crtm, gsibec, GEOS GCM, UFS.
-
-## Tests
-
-```bash
-ctest --output-on-failure -R fv3jedi
-ctest -N -R fv3jedi
-```
-
-Test configs in `test/testinput/` (~100+ YAMLs). Categories: 3DVAR, 4DVAR (GEOS/GFS/LAM), ensemble methods (EnVar/EDA/LETKF), variable transforms, format conversions. Test CMakeLists.txt is ~2700 lines.
+Build/test quirks (FV3_FORECAST_MODEL, FV3_PRECISION, deps) in `claude/build-and-test.md`.
 
 ## OOPS Traits (`src/fv3jedi/Utilities/Traits.h`)
 

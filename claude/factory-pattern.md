@@ -1,5 +1,7 @@
 # Factory Pattern in JEDI
 
+> **Covers:** Factory<T> base template (`oops/util/Factory.h`), Maker<T> registration idiom, static-initialization registration, `instantiate*Factory.h` headers, variadic-arg maker signatures, chained factory registration across repos, adding a new factory entry, debugging "not in factory" errors.
+
 All JEDI repos use a consistent factory pattern for runtime component selection from YAML configuration. Components are registered by string name and instantiated based on YAML `name:` keys.
 
 ## Core Mechanism

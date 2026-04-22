@@ -1,5 +1,7 @@
 # MPI and Ensemble Distribution Patterns
 
+> **Covers:** commTime, commEns, commSelf, ensemble × time 2D MPI decomposition, Geometry::getComm, GetValues allToAll, patchObs, ObsSpace distributions (RoundRobin/Halo/Inefficient), Observers MPI finalize, saber::ProcessPerts parallel components, coupled-DA communicator split.
+
 How JEDI organizes MPI ranks, distributes ensemble members and time windows, and manages parallel communication.
 
 ## Communicator Hierarchy

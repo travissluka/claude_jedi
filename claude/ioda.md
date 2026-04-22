@@ -1,31 +1,14 @@
 # IODA (JEDI Interface for Observation Data Access)
 
 > Last updated against commit `1af6b6d8` (2026-04-21). Run `cd bundle/ioda && git log --oneline 1af6b6d8..HEAD` to see what changed since.
+>
+> **Covers:** ObsSpace, ObsVector, ObsDataVector, Distribution (RoundRobin/Halo/Inefficient), ObsIterator, DistributionUtils (dot_product, missing-value handling), ioda_engines two-layer design, ObsGroup, ObsStore, HDF5/in-memory/ODB/BUFR backends, OSDF containers, Fortran/Python bindings.
 
 ## Overview
 
 C++14 library providing unified observation data storage with multiple backends, MPI-parallel I/O, and interfaces to C, Fortran, and Python. Source at `bundle/ioda/`.
 
-## Build
-
-```bash
-# From build directory
-make -j8 ioda ioda_engines
-
-# Run all ioda tests
-ctest -R ioda --output-on-failure
-
-# Run a specific test
-ctest -R ioda_obsgroup --output-on-failure -V
-
-# List all ioda tests
-ctest -R ioda -N
-```
-
-CMake options:
-- `IODA_BUILD_LANGUAGE_FORTRAN` (default ON) — build Fortran bindings
-- `BUILD_PYTHON_BINDINGS` (default ON if pybind11 found) — build Python bindings
-- `ENABLE_IODA_DOC` (default OFF) — build Doxygen docs
+Build/test quirks in `claude/build-and-test.md`. `make -j ioda ioda_engines` to build both layers.
 
 ## Code Style
 

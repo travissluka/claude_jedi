@@ -1,6 +1,8 @@
 # SABER (System for Atmospheric and Boundary Layer Error Representation)
 
 > Last updated against commit `8fc98110` (2026-04-21). Run `cd bundle/saber && git log --oneline 8fc98110..HEAD` to see what changed since.
+>
+> **Covers:** SaberCentralBlockBase, SaberOuterBlockBase, SaberParametricBlockChain, SaberEnsembleBlockChain, SaberHybridBlockChain, SaberOuterBlockChain, BUMP_NICAS, Diffusion/DiffusionImpl/DiffusionFilter, FastLAM, Bifourier, SpectralCovariance/Correlation/AnalyticalCorrelation, StdDev, VertLoc, DuplicateVariables, ID, GaussToCS, VaderBlock, TorchBalance, GSIBlockChain, QUENCH testbed, ErrorCovariance<MODEL>, ErrorCovarianceToolbox, ProcessPerts, Localization, multiply/multiplyAD/leftInverseMultiply/multiplySqrt, direct/iterative calibration, dirac tests, CoupledErrorCovariance.
 
 ## Overview
 
@@ -10,42 +12,7 @@ SABER's core idea: error covariance operators are built by composing **blocks** 
 
 **B matrix decomposition**: `B = T V K Σ C Σ Kᵀ Vᵀ Tᵀ` where T = variable transform (VADER), V = vertical balance, K = vertical localization, Σ = standard deviation scaling, C = horizontal correlation (BUMP_NICAS, Diffusion, etc.). Each factor is a SABER block. Outer blocks (T, V, K, Σ) wrap the central block (C).
 
-## Build
-
-```bash
-# From build directory
-make saber
-
-# Build options (set in bundle CMakeLists.txt or via -D flags)
-# ENABLE_BUMP (ON): BUMP correlation/localization
-# ENABLE_QUENCH (ON): QUENCH testbed (pseudo-model for testing blocks with any ATLAS grid)
-# ENABLE_MKL (ON): Use MKL for LAPACK
-# OPENMP (ON): OpenMP parallelism
-```
-
-Conditional blocks depending on available libraries:
-- **Bifourier**: requires FFTW or (ECTRANS + transi)
-- **FastLAM**: requires FFTW
-- **GSI**: requires gsibec
-- **SpectralB**: requires atlas TRANS or ECTRANS
-
-Dependencies: oops ≥1.10.0, vader ≥1.7.0, eckit ≥1.17.1, fckit ≥0.9.5, atlas ≥0.35.0, LAPACK, MPI, NetCDF, OpenMP.
-
-## Tests
-
-```bash
-ctest --output-on-failure -R saber       # All SABER tests
-ctest --output-on-failure -R dirac       # Impulse response tests
-ctest --output-on-failure -R randomization  # Randomization tests
-ctest -N -R saber                        # List tests
-```
-
-Test structure:
-- `test/testinput/` — ~250 YAML configs
-- `test/testref/` — reference outputs
-- `test/fctest/` — Fortran unit tests
-
-Test categories: DIRAC (impulse response), randomization, calibration/training, diagnostics, format conversion.
+Build/test quirks (flags, conditional blocks, test structure) in `claude/build-and-test.md`.
 
 ## Core Architecture
 
@@ -92,6 +59,69 @@ Three chain types compose blocks into full covariance operators:
 
 **`SaberCentralBlock`** — Container for multivariate central blocks:
 - Strategies: "duplicated" (replicate per variable group), "duplicated and weighted" (with off-diagonal weights)
+
+### Chain Multiply Order
+
+The factorization `B = Outer_N · ... · Outer_1 · Central · Outer_1ᵀ · ... · Outer_Nᵀ` drives the apply order. Outer blocks are stored innermost→outermost.
+
+**Parametric chain**:
+1. Adjoint pass (outer→inner): for `i = 0..N-1`, `outerBlock[i].multiplyAD(fset)`
+2. `centralBlock.multiply(fset)`
+3. Forward pass (inner→outer): for `i = N-1..0`, `outerBlock[i].multiply(fset)`
+
+**Ensemble chain** (step 2 replaced by):
+```
+For each member ie:
+  if localization:
+    tmp = fset ⊙ ensemble[ie]           # Schur product
+    locBlockChain.multiply(tmp)         # Apply localization
+    tmp = tmp ⊙ ensemble[ie]            # Second Schur
+  else:
+    tmp = ensemble[ie] * dot_product(fset, ensemble[ie])
+  result += tmp
+result /= (ens_size - 1)
+```
+
+**Hybrid chain** (step 2 replaced by): for each component j, apply `√wⱼ`, multiply by component B, apply `√wⱼ` again, accumulate. Gives `B_hybrid = Σⱼ √wⱼ · Bⱼ · √wⱼ` which preserves self-adjointness. Optional `run in parallel: true` splits MPI ranks across components.
+
+### Multiply Method Reference
+
+| Method | Direction | Use Case |
+|--------|-----------|----------|
+| `multiply` | Forward (inner→outer) | Normal B application |
+| `multiplyAD` | Adjoint (outer→inner) | Normal B application |
+| `leftInverseMultiply` | Inverse (outer→inner) | Calibration: transform ensemble to inner space |
+| `rightInverseMultiply` | Right inverse (inner→outer) | Ensemble transform |
+| `multiplySqrt(cv, fset)` | Apply U | Control vector → field (`B = U Uᵀ`) |
+| `multiplySqrtAD(fset, cv)` | Apply Uᵀ | Field → control vector |
+
+Control vector size:
+- **Parametric**: determined by central block (e.g. diffusion length scales)
+- **Ensemble, no localization**: one scalar per member
+- **Ensemble with localization**: `ens_size × loc_ctlVecSize()`
+
+### Built-in Validation Tests
+
+Configurable under any block chain:
+```yaml
+adjoint test: true          # Verify <y, Ax> = <Aᵀy, x>
+adjoint tolerance: 1.0e-10
+square-root test: true      # Verify UUᵀ = B
+inverse test: true           # Verify B⁻¹B = I
+```
+
+### Chain Key Files
+
+| File | Purpose |
+|------|---------|
+| `saber/blocks/SaberBlockChainBase.h` | Abstract chain interface |
+| `saber/blocks/SaberParametricBlockChain.h/.cc` | Parametric implementation |
+| `saber/blocks/SaberEnsembleBlockChain.h/.cc` | Ensemble implementation |
+| `saber/blocks/SaberHybridBlockChain.h` | Hybrid implementation |
+| `saber/blocks/SaberOuterBlockChain.h` | Outer-block sequencer (also backs filter blocks) |
+| `saber/blocks/SaberOuterBlockBase.h` | Outer block interface + factory |
+| `saber/blocks/SaberCentralBlockBase.h` | Central block interface + factory |
+| `saber/oops/ErrorCovariance.h` | Integration with oops covariance system |
 
 ### OOPS Integration
 

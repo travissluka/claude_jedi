@@ -1,23 +1,14 @@
 # Coupling (Coupled Atmosphere-Ocean DA)
 
 > Last updated against commit `d468220b` (2026-03-26). Run `cd bundle/coupling && git log --oneline d468220b..HEAD` to see what changed since.
+>
+> **Covers:** oops::TraitCoupled<Traits1,Traits2>, oops::GeometryCoupled, oops::StateCoupled, oops::AuxCoupledModel, BlockDiagonalCovarianceCoupled, YAML `covariance model: Coupled Block Diagonal`, FV3-JEDI + SOCA coupled 3D-Var, OASIM ocean color operator.
 
 ## Overview
 
 Coupled atmosphere-ocean data assimilation using FV3-JEDI (atmosphere) and SOCA (ocean). Source at `bundle/coupling/`. Version 1.2.0. C++ only (~270 lines of core source). The repo is intentionally minimal — it leverages oops coupled template types to combine two existing model interfaces without duplicating their code.
 
-## Build
-
-```bash
-# From build directory
-make coupling
-
-# Tests
-ctest --output-on-failure -R coupling
-ctest -N -R coupling   # List tests
-```
-
-Dependencies: oops ≥1.10.0, eckit ≥1.24.4, fv3-jedi, soca, saber, ioda, ufo, crtm. Optional: oasim (ocean color operator).
+Build/test quirks (deps on fv3-jedi, soca, crtm; optional oasim; 11 test targets all MPI 6) in `claude/build-and-test.md`.
 
 ## How Coupling Works
 

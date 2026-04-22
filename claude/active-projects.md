@@ -1,5 +1,7 @@
 # Active Projects
 
+> **Covers:** SequentialEnsembleSolver<MODEL,OBS>, EAKFSolver<MODEL,OBS> (Anderson & Collins 2007), ioda::ObsIterator, ObsLocalization::computeLocalization(Point3, Point3), QG GC99 localization switch, soca ObsLocRossby Point3 stub. PR links across oops/ioda/ufo/soca/pyiri-jedi.
+
 ## Sequential EnKF Feature (feature/sequential_enkf)
 
 **Status**: All PRs open, under review
@@ -55,42 +57,7 @@
 - `ObsLocRossby` got a stub `computeLocalization(Point3, Point3)` that throws ABORT (Rossby-based localization needs `GeometryIterator::getFieldValue()` which doesn't work for obs/obs localization)
 - EAKF test added
 
-### Copilot Review Comments — Status (verified 2026-04-16)
-
-#### OOPS (PR #3193) — ✅ ALL DONE
-- [x] `#include <numeric>` in `SequentialEnsembleSolver.h`
-- [x] `.1` → `0.1` in `l95/test/testinput/sequential_enkf.yaml` line 22 (kbhargava, 2026-04-15)
-
-#### IODA (PR #1674) — 1 pending + 2 perf comments; srherbener APPROVED
-- [x] Include path in `test/mains/TestObsIterator.cc` → `oops/test/interface/ObsIterator.h`
-- [x] Test target renamed to `ioda_obsiterator`
-- [ ] Iterator traits in `src/ObsIterator.h`: still `std::forward_iterator_tag` with `pointer = Point3*`, `reference = Point3&`. Needs change to `std::input_iterator_tag`, `pointer = void`, `reference = Point3`.
-- [ ] PERF: `ObsIterator` eagerly loads full lat/lon arrays in constructor → `begin()`/`end()` construction costly. Suggestion: cache lat/lon in `ObsSpace`, make iterator lightweight.
-- [ ] PERF: same issue surfaced at `src/ObsSpace.h` line 549 — calling `end()` in loop condition re-constructs iterator repeatedly.
-
-#### UFO (PR #4027) — 3 pending comments
-- [x] `#include "eckit/geometry/Point3.h"` in `ObsLocalizationBase.h`
-- [x] Typo "regarless" → "regardless"
-- [x] `distance >= lengthscale` consistency in `ObsHorLocalization.h`, `ObsHorLocGC99.h`, `ObsHorLocSOAR.h`
-- [ ] Guard against `lengthscale <= 0` in new `computeLocalization(Point3, Point3)` overload (division by zero) in `ObsHorLocGC99.h`
-- [ ] YAML indentation fix in `test/testinput/unit_tests/obslocalization/obs_localization.yaml`
-- [ ] Qualify template as `ufo::ObsLocalization<Iterator_>` in `test/ufo/ObsLocalization.h`
-
-#### SOCA (PR #1224) — 2 previously-untracked Copilot comments
-- [ ] `src/soca/ObsLocalization/ObsLocRossby.cc` line 72: add `#include "oops/util/abor1_cpp.h"` (for ABORT macro) + add dummy return after ABORT to avoid `-Wreturn-type` error
-- [ ] `src/soca/ObsLocalization/ObsLocRossby.cc` lines 70-71: cast unused params `(void)p1; (void)p2;` to suppress `-Wunused-parameter`
-
-#### PYIRI-JEDI (PR #166) — stubs-only PR; jhaiduce APPROVED; Copilot comments are known/expected
-- Copilot flagged ABORT stubs in `ObsIterator.cc`, `ObsSpacePyiri.cc`, expensive copies in `ObsIterator.h`, missing YAML file — all are acknowledged limitations of the stubs-only approach
-- ncrossette: extra whitespace in `src/pyiri-jedi/Model/ObsSpacePyiri.h` — minor, easy fix
-- jhaiduce asked (2026-03-17) whether Point3 localization can be used with LETKF, what coordinate frame it uses, and how locations are populated — needs response or resolution
-
-### Known TODOs (from PR description)
-1. Only horizontal obs localization implemented — add vertical
-2. Refactor: `SequentialEnsembleSolver` shouldn't subclass `LocalEnsembleSolver`; extract common `EnsembleSolver` superclass
-3. `GeometryIterator` naming abuse — consider renaming to `LocationIterator`
-4. Investigate particle filter fit into this framework
-5. soca Rossby localization needs rework for obs/obs case
+> Review-comment status and per-PR TODO lists are transient — fetch them live via `gh pr view <N> -R JCSDA-internal/<repo> --comments`. Open TODOs that outlast the PRs live in user MEMORY (see `project_sequential_enkf_followups.md`).
 
 ### YAML Config
 ```yaml

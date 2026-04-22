@@ -1,30 +1,14 @@
 # MPAS-JEDI
 
 > Last updated against commit `a4984eb4` (2026-04-16). Run `cd bundle/mpas-jedi && git log --oneline a4984eb4..HEAD` to see what changed since.
+>
+> **Covers:** mpas::Traits, mpas::{Geometry,State,Increment,Model,LinearModel,VariableChange}, unstructured Voronoi mesh, MPAS 8.0 core_atmosphere integration, variable-resolution support, RTTOV/ROPP-UFO optional operators, opaque-handle Fortran pattern.
 
 ## Overview
 
 Interface between JEDI and the Model for Prediction Across Scales (MPAS) atmospheric model. MPAS uses an unstructured Voronoi mesh (variable-resolution capability). Source at `bundle/mpas-jedi/`. Version 3.1.0. C++17/Fortran 2008.
 
-## Build
-
-```bash
-# From build directory
-make mpas-jedi
-
-# Requires MPAS 8.0 core_atmosphere component
-```
-
-Dependencies: MPAS 8.0, oops ≥1.10.0, saber ≥1.10.0, ioda ≥2.9.0, ufo ≥1.10.0, atlas ≥0.35.0, Boost, MPI. Optional: RTTOV 12.1.0, ROPP-UFO.
-
-## Tests
-
-```bash
-ctest --output-on-failure -R mpas
-ctest -N -R mpas
-```
-
-Test configs in `test/testinput/`: 3dvar, 3denvar, 4denvar, EDA, error covariance, dirac tests. Covariance offline processing scripts in `test/covariance/`.
+Build/test quirks (MPAS 8.0 `core_atmosphere`, optional RTTOV/ROPP-UFO) in `claude/build-and-test.md`. Test categories: 3dvar, 3denvar, 4denvar, EDA, error covariance, dirac. Offline covariance processing scripts in `test/covariance/`.
 
 ## OOPS Traits (`src/mpasjedi/Traits.h`)
 

@@ -1,35 +1,14 @@
 # OOPS (Object Oriented Prediction System)
 
-> Last updated against commit `2c466b91` (2026-04-21). Run `cd bundle/oops && git log --oneline 2c466b91..HEAD` to see what changed since.
+> Last updated against commit `6cffda6f` (2026-04-22). Run `cd bundle/oops && git log --oneline 6cffda6f..HEAD` to see what changed since.
+>
+> **Covers:** Variational, CostFunction, CostFct3DVar/3DFGAT/4DVar/WC4DVar/4DEnsVar, CostJo, CostJb3D/4D/Jq, Minimizer (PCG/DRPCG/FGMRES/RPCG/...), LocalEnsembleSolver, LETKF/GETKF (Deterministic/Stochastic), LocalEnsembleDA, Observer, Observers, Variables, FieldSet3D/4D, FieldSets, IncrementSet, StateSet, GeometryData, PseudoModel, Application runs (Forecast/HofX/EDA/GenEnsPertB/...), inflation (RTPP/RTPS/mult), cross-validation, Nerger regulation, L95/QG toy models.
 
 ## Overview
 
 C++/Fortran framework for model-agnostic NWP data assimilation. Source at `bundle/oops/`.
 
-## Build
-
-```bash
-# From build directory
-make oops
-
-# Build options
-# ENABLE_LORENZ95_MODEL (ON): Build Lorenz95 toy model
-# ENABLE_QG_MODEL (ON): Build quasi-geostrophic toy model
-# ENABLE_MKL (ON): Use MKL for LAPACK
-# ENABLE_GPTL (OFF): GPTL profiling
-```
-
-Dependencies: eckit ≥1.24.4, fckit ≥0.11.0, atlas ≥0.35.0, Eigen3, MPI, NetCDF (parallel), Boost ≥1.64, LAPACK/MKL, OpenMP.
-
-## Tests
-
-```bash
-ctest --output-on-failure -R l95_3dvar    # Single test
-ctest --output-on-failure -R 3dvar        # Pattern match
-ctest --output-on-failure -E coding_norms # Skip lint
-```
-
-Tests defined in `l95/test/CMakeLists.txt`, `qg/test/CMakeLists.txt`, `coupled/test/CMakeLists.txt`. Each runs an executable with a YAML config and compares output to a reference file.
+Build/test quirks in `claude/build-and-test.md`.
 
 ## Source Layout (`src/oops/`)
 
@@ -96,15 +75,21 @@ All 4 solvers use `LocalEnsembleSolver` (iterate over grid points, solve local a
 
 ## Cost Functions (5 total)
 
-Configured via `cost type` in YAML:
+Every variational cost function minimizes `J(x) = Jb + Jo [+ Jc]` where Jb is the background term, Jo the observation term, and Jc an optional constraint (e.g. `CostJcDFI` for digital filter initialization). All live in `src/oops/assimilation/`. Configured via `cost type` in YAML:
 
-| YAML Name | Class | Description |
-|-----------|-------|-------------|
-| `3D-Var` | `CostFct3DVar` | Standard 3D variational — single time window, no model integration |
-| `3D-FGAT` | `CostFct3DFGAT` | 3D First Guess at Appropriate Time — obs evaluated at their valid time against propagated background, but analysis is single-time |
-| `4D-Ens-Var` | `CostFct4DEnsVar` | 4D ensemble-variational — localized ensemble B matrix with 4D obs, no TLM/ADM needed |
-| `4D-Var` | `CostFct4DVar` | Full 4D variational — uses TLM/ADM for propagating increments |
-| `4D-Var-Weak` | `CostFctWC4DVar` | Weak-constraint 4D-Var — allows model error term |
+| YAML Name | Class | Control Variable | Needs TLM/ADM? | Notes |
+|-----------|-------|------------------|----------------|-------|
+| `3D-Var` | `CostFct3DVar` | 3D state at window midpoint | No | `J = ½(x-xb)ᵀB⁻¹(x-xb) + ½(y-H(x))ᵀR⁻¹(y-H(x))`. Fastest. |
+| `3D-FGAT` | `CostFct3DFGAT` | 3D state at initial time | Yes | Background forecast to obs times, H(x) evaluated at correct time; analysis is single-time. |
+| `4D-Var` | `CostFct4DVar` | Initial condition x₀ | Yes | Strong constraint: state must lie on trajectory `M(x₀)`. `J = ½(x₀-xb)ᵀB⁻¹(x₀-xb) + ½Σₜ (yₜ-Hₜ(Mₜ(x₀)))ᵀRₜ⁻¹(...)`. |
+| `4D-Var-Weak` | `CostFctWC4DVar` | 4D — states at sub-window boundaries + model-error increments qₖ | Yes | Weak constraint: allows `qₖ ~ N(0,Qₖ)`. Sub-windows distributed across `commTime`. |
+| `4D-Ens-Var` | `CostFct4DEnsVar` | 4D state at snapshot times | No | 4D ensemble B provides time covariance; no TLM/ADM needed. |
+
+**Jb classes**: `CostJb3D` (single-time B, used by 3D-Var/FGAT/4D-Var), `CostJb4D` (4D-Ens-Var), `CostJbJq` (weak 4D-Var, B + model error Q per sub-window). Key ops: `linearize()`, `Bmult()`, `Bminv()`, `randomize()`.
+
+**Jo** (`CostJo.h`): runs observers, loads `ObsValue`, computes departures `H(x)-y`, applies `R⁻¹` to get gradient, returns `½ ydep · gradFG`. Rejected obs (qcflag != 0 → obs error masked to missing) are skipped via missing-value propagation in `ObsVector` arithmetic and `dot_product_with`.
+
+**Outer/inner loops** (`Variational::execute`): outer loop does NL model eval + relinearization of B/TLM/H; inner loop runs the minimizer against the linearized problem to produce δx; update `x ← x + δx`; repeat.
 
 ## Ensemble Inflation Options
 
@@ -188,4 +173,4 @@ oops defines the `MODEL` and `OBS` template contracts that all other repos imple
 - **SABER** registers as a covariance model via `saber::instantiateCovarFactory<MODEL>()`
 - **GetValues** (`base/GetValues.h`) bridges MODEL state to OBS operators by interpolating to obs locations
 
-See `.claude/cross-repo-interactions.md` for full details.
+See `claude/cross-repo-interactions.md` for full details.

@@ -1,5 +1,7 @@
 # ATLAS FieldSet as Shared Data Layer
 
+> **Covers:** atlas::FieldSet, atlas::Field, atlas::FunctionSpace (StructuredColumns, NodeColumns, PointCloud), oops::FieldSet3D/4D wrappers, MODEL::State::toFieldSet / fromFieldSet (halo rules), metadata conventions, shallow vs deep copy, memory sharing with Fortran via ATLAS Fortran API.
+
 How `atlas::FieldSet` bridges model repos, SABER, and VADER in JEDI. FieldSet is the universal data exchange format — model repos populate them, SABER/VADER operate on them in-place.
 
 ## Data Flow

@@ -1,23 +1,14 @@
 # SOCA (Sea-ice, Ocean, and Coupled Assimilation)
 
 > Last updated against commit `3bf226dd` (2026-03-30). Run `cd bundle/soca && git log --oneline 3bf226dd..HEAD` to see what changed since.
+>
+> **Covers:** soca::Traits, soca::{Geometry,State,Increment,ModelOceanIceEmulator,LinearModelOceanIceEmulator,VariableChange}, ObsLocRossby, SABER SOCA blocks (BkgErrFilt, ParametricOceanStdDev, MLBalance), MOM6 restart format, Icepack sea-ice, KEmul/IceEmul ML emulators, opaque-handle Fortran pattern (F90geom/F90flds/F90iter/F90model/F90bmat).
 
 ## Overview
 
 Ocean/sea-ice data assimilation interface for JEDI, coupling MOM6 (ocean) and Icepack (sea ice) with the oops DA framework. Source at `bundle/soca/`. Version 1.8.0. C++/Fortran.
 
-## Build
-
-```bash
-# From build directory
-make soca
-
-# Tests
-ctest --output-on-failure -R soca
-ctest -N -R soca   # List tests
-```
-
-Dependencies: oops ≥1.10.0, saber ≥1.10.0, ioda ≥2.9.0, ufo ≥1.10.0, vader ≥1.7.0, atlas ≥0.35.0, eckit ≥1.24.4, fckit ≥0.11.0, FMS 2023.3.0 (R8), NetCDF (C+Fortran), GSL-lite, OpenMP. External models: MOM6 (`external/mom6`), Icepack (`external/icepack`). Optional: Torch (enables MLBalance SABER block).
+Build/test quirks (FMS, GSL-lite, MOM6/Icepack externals, Torch/MLBalance) in `claude/build-and-test.md`.
 
 ## OOPS Traits (`src/soca/Traits.h`)
 
@@ -171,11 +162,4 @@ Default variables (from `ModelData`): sea water temperature, salinity, SSH, east
 
 ## Tests
 
-```bash
-ctest --output-on-failure -R soca
-ctest -N -R soca
-```
-
-95+ YAML test configs in `test/testinput/`. 14 test executables in `test/executables/` covering Geometry, GeometryIterator, GetValues, State, Increment, LinearModel, VariableChange, ObsLocalization, and more. Reference outputs in `test/testref/`. Test data in `test/Data/` (36x17x25 and 72x35x25 ocean grids with MOM6 restarts).
-
-Test categories: variational DA (3dvar, 3dhyb, 4dvar), ensemble methods (letkf, getkf), forecasts, H(x), linear model, variable transforms, diagnostics (dirac), ensemble utilities, ML balance training.
+14 test executables in `test/executables/` (Geometry, GeometryIterator, GetValues, State, Increment, LinearModel, VariableChange, ObsLocalization, …). Test data in `test/Data/` (grids: 36×17×25 and 72×35×25, MOM6 restart format). Categories: variational DA (3dvar/3dhyb/4dvar), ensemble (letkf/getkf), forecasts, H(x), linear model, variable transforms, dirac diagnostics, ensemble utilities, ML balance training.

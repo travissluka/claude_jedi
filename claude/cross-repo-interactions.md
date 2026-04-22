@@ -1,6 +1,8 @@
 # Cross-Repo Interactions
 
-> Last updated 2026-04-09 (refreshed). Based on the same repo commits as the individual `.claude/*.md` files.
+> Last updated 2026-04-22. Based on the same repo commits as the individual `claude/*.md` files.
+>
+> **Covers:** MODEL template contract (Geometry/State/Increment/Model/LinearModel/VariableChange/LinearVariableChange/ErrorCovariance/ModelAux*/LocalInterpolator/ModelData), ufo::ObsTraits, GetValues<MODEL,OBS>, saber::ErrorCovariance<MODEL>, instantiateCovarFactory, instantiateObsFilterFactory, instantiateObsLocFactory, ATLAS as shared data layer, impact map (what-changes-affects-what), C++/Fortran interop patterns (ISO_C_BINDING / opaque-handle / ATLAS bridge), coupled DA, CRTM integration.
 
 How the JEDI repositories interact with each other. Read this to understand what changes in one repo may affect in others.
 
@@ -18,32 +20,103 @@ oops::LocalEnsembleDA<mpas::Traits, ufo::ObsTraits>
 
 ## What MODEL Must Implement
 
-oops `interface/` headers define the contract. Each model repo must provide classes with these methods:
+oops `interface/` headers wrap the inner classes automatically — model repos only implement the inner types. Every implementation class needs `static const std::string classname()`.
 
-**Geometry**: constructor from `(Config, MPI::Comm)`, `functionSpace()`, `fields()` (ATLAS), `variableSizes(Variables)`, `levelsAreTopDown()`, `verticalCoord(string)`, `begin()`/`end()` (GeometryIterator), `getComm()`
+### Geometry — `Geometry(const eckit::Configuration &, const eckit::mpi::Comm &)`
 
-**State**: constructors for creation/reading/interpolation/subsetting, `validTime()`, `variables()`, `read()`/`write()`, `zero()`, `accumul()`, `norm()`, `toFieldSet()`/`fromFieldSet()`, `serialize()`/`deserialize()`
+| Method | Purpose |
+|--------|---------|
+| `GeometryIterator begin()/end() const` | Gridpoint iteration |
+| `std::vector<double> verticalCoord(std::string &) const` | Vertical coordinate values |
+| `std::vector<size_t> variableSizes(const Variables &) const` | Levels per variable at one location (typically delegates to `FieldsMetadata`) |
+| `bool levelsAreTopDown() const` | True if vertical levels ordered top→bottom (fv3-jedi and soca hardcode true) |
+| `const eckit::mpi::Comm & getComm() const` | MPI communicator |
+| `const atlas::FunctionSpace & functionSpace() const` | ATLAS function space (grid) |
+| `const atlas::FieldSet & fields() const` | ATLAS fields (lat, lon, masks) |
 
-**Increment**: same as State plus `diff(State, State)`, `axpy()`, `dot_product_with()`, `schur_product_with()`, `dirac()`, `getLocal(GeometryIterator)`/`setLocal()`, `random()`
+### State
 
-**Model**: `initialize(State)`, `step(State, ModelAuxControl)`, `finalize(State)`, `timeResolution()`
+Required constructors: `(Geometry, Variables, DateTime)` (empty), `(Geometry, Configuration)` (read/analytic), `(Geometry, State)` (copy + resolution change), `(Variables, State)` (copy + variable change), `(State)` (copy).
 
-**LinearModel**: `setTrajectory(State, State, ModelAuxControl)`, `initializeTL/stepTL/finalizeTL(Increment)`, `initializeAD/stepAD/finalizeAD(Increment)`
+| Method | Purpose |
+|--------|---------|
+| `validTime()`, `updateTime(Duration)` | Time accessors |
+| `read/write(Configuration)` | File I/O |
+| `norm()`, `variables()`, `zero()` | Basic queries/ops |
+| `accumul(double, const State &)` | `this += w * other` |
+| `toFieldSet(FieldSet &) const` / `fromFieldSet(const FieldSet &)` | **ATLAS bridge.** `toFieldSet` includes halo; `fromFieldSet` reads interior only. |
+| `serialSize()`, `serialize(vec)`, `deserialize(vec, i)` | Used in 4DEnVar, weak 4DVar, Block-Lanczos |
 
-**VariableChange**: `changeVar(State, Variables)`, `changeVarInverse(State, Variables)`
+### Increment
 
-**ErrorCovariance**: `doRandomize(Increment4D)`, `doMultiply(Increment4D, Increment4D)`, `doInverseMultiply(Increment4D, Increment4D)`
+Required constructors: `(Geometry, Variables, DateTime)` (zero), `(Geometry, Increment)` (copy + resolution), `(Increment, bool copy=true)` (copy or zero with same shape).
+
+| Method | Purpose |
+|--------|---------|
+| `diff(State, State)` | Set to `state1 - state2` |
+| `zero()`/`zero(DateTime)`, `ones()`, `sqrt()` | Bulk element ops |
+| `dirac(Configuration)` | Impulse response (SABER tests) |
+| `+=`, `-=`, `*=(double)`, `axpy(w, dx)` | Linear algebra |
+| `dot_product_with(Increment)`, `schur_product_with(Increment)` | Inner/Hadamard products |
+| `random()` | Randomize (tests) |
+| `accumul(double, const State &)` | `this += w * state` (WeightedDiff) |
+| `getLocal(GeometryIterator)` → `LocalIncrement`, `setLocal(LocalIncrement, GeometryIterator)` | Column access — **essential for LETKF/GETKF** |
+| `read/write/norm/variables/validTime/updateTime` | As State |
+| `toFieldSet/fromFieldSet` | ATLAS bridge |
+| `serialSize/serialize/deserialize` | Serialization support |
+
+### Model (Nonlinear) — `Model(Geometry, Configuration)`
+
+`initialize(State)`, `step(State, ModelAuxControl)`, `finalize(State)`, `timeResolution()`.
+
+### LinearModel (TLM/ADM) — `LinearModel(Geometry, Configuration)`
+
+Required for 4DVar. TL runs forward; AD runs backward.
+
+| Method | Purpose |
+|--------|---------|
+| `setTrajectory(State, State, ModelAuxControl)` | Store NL trajectory |
+| `initializeTL/stepTL/finalizeTL(Increment)` | TL pass |
+| `initializeAD/stepAD/finalizeAD(Increment)` | AD pass (ModelAuxIncrement modified) |
+| `timeResolution()`, `stepTrajectory()` | Timing |
+
+### GeometryIterator
+
+Forward iterator over gridpoints (LocalEnsembleDA). Methods: `operator==`, `operator!=`, `operator*` (→ `eckit::geometry::Point3(lon, lat, vert)`), `operator++`.
+
+### VariableChange / LinearVariableChange
+
+- **Nonlinear**: `changeVar(State, Variables)`, `changeVarInverse(State, Variables)`
+- **Linear**: `changeVarTraj(State, Variables)` + TL/AD/inverse variants (`changeVarTL`, `changeVarInverseTL`, `changeVarAD`, `changeVarInverseAD`)
+
+### ErrorCovariance — `Covariance(Geometry, Variables, Configuration, State, State)`
+
+`randomize(Increment)`, `multiply(Increment, Increment)`, `inverseMultiply(Increment, Increment)`. Most model repos leave this as a stub — SABER registers `"SABER"` in the covariance factory instead.
+
+### ModelAuxControl / ModelAuxIncrement / ModelAuxCovariance
+
+Auxiliary state for model bias/parameters; minimal stubs in most repos. ModelAuxIncrement supports full linear algebra + `diff(Control, Control)`.
+
+### ModelData — `ModelData(Geometry)`
+
+`modelData()` (metadata as config), static `defaultVariables()`.
+
+### LocalInterpolator — `LocalInterpolator(Configuration, Geometry, lats, lons)`
+
+`apply(Variables, State, mask, vec)`, `apply(Variables, Increment, mask, vec)`, `applyAD(Variables, Increment, mask, vec)`. Most repos use `oops::UnstructuredInterpolator` (generic ATLAS-based); pyiri-jedi uses custom interpolators for field-aligned geometry.
 
 ## How GetValues Bridges Model to Observations
 
 `oops::GetValues<MODEL, OBS>` (`oops/src/oops/base/GetValues.h`) is the critical bridge:
 
-1. Takes `Geometry<MODEL>` + `SampledLocations<OBS>` (obs locations from UFO)
-2. Creates `LocalInterpolator<MODEL>` instances per MPI task
+1. Takes `Geometry<MODEL>` + `oops::Locations<OBS>` (obs locations from UFO)
+2. Creates `LocalInterpolator<MODEL>` instances per MPI task per sampling method
 3. During time-stepping, calls `process(State)` → interpolates model fields to obs locations
 4. Exchanges interpolated data across MPI ranks via `allToAll()`
 5. Populates `GeoVaLs<OBS>` (UFO's container for model data at obs locations)
 6. `ufo::ObsOperator::simulateObs(GeoVaLs)` then computes H(x)
+
+As of oops PR #3202 (2026-04-22), `oops::Locations<OBS>` wraps the list of `ufo::SampledLocations` (one per sampling method) and the loop over sampling methods moved *inside* GetValues. Previously, `Observer`/`ObserverTLAD` iterated sampling methods externally and constructed a `GetValues` per method. The obs-side `ufo::SampledLocations` type is unchanged; the change is purely in how oops constructs and drives the bridge.
 
 Both fv3-jedi and mpas-jedi use `oops::UnstructuredInterpolator` as their `LocalInterpolator`. pyiri-jedi implements custom interpolators for field-aligned geometry. soca uses the same pattern for ocean/ice observations.
 

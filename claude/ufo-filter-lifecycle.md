@@ -1,5 +1,7 @@
 # UFO Filter/Operator Lifecycle
 
+> **Covers:** FilterBase, QCmanager, FinalCheck, filter stages (pre-/prior-/post-filters, obsPostFilters), `where` clause, filter actions (RejectObs/AcceptObs/AssignError/InflateError/PassivateObs/ROobserrInflation/SetFlag/SetFlagBit), QCflags (pass/missing/preQC/bounds/domain/blackList/Hfailed/thinned/diffref/clw/fguess/seaice/track/buddy/derivative/processed), ObsFunction, ObsFilterData, ObsDataVector<int> flags, ObsDataVector<float> obserr, variable transforms, CreateDiagnosticFlags, obs-error masking to missing values.
+
 Detailed guide to filter stages, actions, ObsFunctions, and variable transforms in UFO.
 
 ## Filter Pipeline Stages

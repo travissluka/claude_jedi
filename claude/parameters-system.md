@@ -1,5 +1,7 @@
 # Parameters System
 
+> **Covers:** ParameterBase, Parameter<T>, RequiredParameter<T>, OptionalParameter<T>, PolymorphicParameter, Parameters_ typedef, validate(), deserialize(), serialize(), config→Parameters round-trip, nested parameter classes, parameter constraints.
+
 Type-safe YAML configuration system used across all JEDI repos. Located in `oops/src/oops/util/parameters/`.
 
 ## Class Hierarchy

@@ -1,5 +1,7 @@
 # Observation Data Flow in JEDI
 
+> **Covers:** IODA ObsSpace load → GetValues → GeoVaLs → ObsOperator::simulateObs → ObsFilters chain → ObsError (R) → CostJo path. QC flag → obs error masking to missing → minimizer skip. EffectiveError/EffectiveQC naming. Observer::finalize. obserr→R update cycle.
+
 End-to-end trace of how observations move from IODA files through UFO operators to the oops cost function.
 
 ## Overview

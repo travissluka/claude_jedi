@@ -1,5 +1,7 @@
 # Testing Patterns in JEDI
 
+> **Covers:** ecbuild_add_test, MPI/OMP parameter combinations, SABER tier system (TIER 1/2), reference output comparison (testref/testoutput), adjoint/dot-product tests, dirac impulse-response tests, randomization tests, ctest regex patterns, test_depends chaining, adding a new test.
+
 How tests are structured, registered, and run across JEDI repos.
 
 ## ecbuild_add_test Macro

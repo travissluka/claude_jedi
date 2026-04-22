@@ -1,6 +1,8 @@
 # PyIRI-JEDI
 
 > Last updated against commit `dfb0b900` (2026-04-16). Run `cd bundle/pyiri-jedi && git log --oneline dfb0b900..HEAD` to see what changed since.
+>
+> **Covers:** pyiri::Traits, PyIRI Python submodule, ObsSpacePyiri, FieldsPyiri/StatePyiri, LETKF for ionosphere, field-line tracing, VTEC/slant TEC/electron density obs, CFFI Python↔Fortran bindings, custom interpolators for field-aligned geometry.
 
 ## Overview
 
@@ -8,25 +10,7 @@ Interface between JEDI and PyIRI (Python International Reference Ionosphere), pr
 
 Unlike the atmospheric model interfaces (fv3-jedi, mpas-jedi), pyiri-jedi implements its own observation operators and interpolators rather than using UFO exclusively, though it also supports UFO integration.
 
-## Build
-
-```bash
-# From build directory
-make pyiri-jedi
-
-# Requires Python 3.5+, CFFI for Python-Fortran bindings
-```
-
-Dependencies: oops, ioda, ufo, atlas, Eigen, Boost, NetCDF-Fortran, MPI, Python 3.5+. PyIRI is included as a git submodule.
-
-## Tests
-
-```bash
-ctest --output-on-failure -R pyirijedi
-ctest -N -R pyirijedi
-```
-
-Test categories: LETKF analysis (state index, point, VTEC obs), HofX forward operators, coordinate conversion, tracegrid interpolation, coding norms (cpplint + pycodestyle).
+Build/test quirks (Python 3.5+, CFFI, PyIRI submodule) in `claude/build-and-test.md`. Test categories: LETKF analysis (state index, point, VTEC obs), HofX forward operators, coordinate conversion, tracegrid interpolation.
 
 ## Architecture
 

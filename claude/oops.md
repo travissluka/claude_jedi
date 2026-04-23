@@ -1,8 +1,8 @@
 # OOPS (Object Oriented Prediction System)
 
-> Last updated against commit `6cffda6f` (2026-04-22). Run `cd bundle/oops && git log --oneline 6cffda6f..HEAD` to see what changed since.
+> Last updated against commit `1e1481d5` (2026-04-23). Run `cd bundle/oops && git log --oneline 1e1481d5..HEAD` to see what changed since.
 >
-> **Covers:** Variational, CostFunction, CostFct3DVar/3DFGAT/4DVar/WC4DVar/4DEnsVar, CostJo, CostJb3D/4D/Jq, Minimizer (PCG/DRPCG/FGMRES/RPCG/...), LocalEnsembleSolver, LETKF/GETKF (Deterministic/Stochastic), LocalEnsembleDA, Observer, Observers, Variables, FieldSet3D/4D, FieldSets, IncrementSet, StateSet, GeometryData, PseudoModel, Application runs (Forecast/HofX/EDA/GenEnsPertB/...), inflation (RTPP/RTPS/mult), cross-validation, Nerger regulation, L95/QG toy models.
+> **Covers:** Variational, CostFunction, CostFct3DVar/3DFGAT/4DVar/WC4DVar/4DEnsVar, CostJo, CostJb3D/4D/Jq, Minimizer (PCG/DRPCG/FGMRES/RPCG/...), LocalEnsembleSolver, LETKF/GETKF (Deterministic/Stochastic), LocalEnsembleDA, Observer, Observers, Variables, FieldSet3D/4D, FieldSets, IncrementSet, StateSet, GeometryData, PseudoModel, CommRedistribution, CommRedistributionRepository, FieldSetSubCommunicators, Application runs (Forecast/HofX/EDA/GenEnsPertB/...), inflation (RTPP/RTPS/mult), cross-validation, Nerger regulation, L95/QG toy models.
 
 ## Overview
 
@@ -20,7 +20,7 @@ Build/test quirks in `claude/build-and-test.md`.
 | `runs/` | Top-level `Application` subclasses that serve as entry points: `Variational`, `Forecast`, `LocalEnsembleDA`, `HofX3D`, `HofX4D`, `EDA`, etc. Each `Application::execute()` reads a YAML config and runs end-to-end. |
 | `generic/` | Model-independent implementations: `IdentityModel`, `HybridLinearModel`, `AtlasInterpolator`, FFT utilities, HTLM tools. |
 | `util/` | Utilities: `DateTime`, `Duration`, `Logger`, `ConfigFunctions`, MPI helpers, Fortran interop. Includes `Factory.h` (generic factory template with variadic maker args). |
-| `util/redistribution/` | `CommRedistribution` (abstract) for repartitioning ATLAS fields between parent/sub communicators. Concrete: `CommGatherScatterRedistribution` (gather-scatter) and `CommStraightRedistribution` (direct MPI `allToAllv` with global-index mapping, cached for reuse — uses `detail/AllToAllRouting` helper). `CommRedistributionCompatChecker` validates compatibility. |
+| `util/redistribution/` | `CommRedistribution` (abstract) for repartitioning ATLAS fields between parent/sub communicators. Concrete: `CommGatherScatterRedistribution` (gather-scatter) and `CommStraightRedistribution` (direct MPI `allToAllv` with global-index mapping, cached for reuse — uses `detail/AllToAllRouting` helper). `CommRedistributionCompatChecker` validates compatibility. `CommRedistributionRepository` (PR #3196) is a multiton cache keyed on (parent FunctionSpace, sub FunctionSpace, method string); callers obtain an existing plan via `get()` instead of reconstructing the (costly) redistribution each call. |
 | `mpi/` | MPI communicator management for ensemble/model decomposition. `ColorInfo` analyzes MPI color grouping in split communicators. `Scope` provides RAII temporary communicator switching. |
 | `atlas/` | Atlas-based interpolation wrappers. |
 

@@ -1,8 +1,8 @@
 # PyIRI-JEDI
 
-> Last updated against commit `dfb0b900` (2026-04-16). Run `cd bundle/pyiri-jedi && git log --oneline dfb0b900..HEAD` to see what changed since.
+> Last updated against commit `7303c282` (2026-04-23). Run `cd bundle/pyiri-jedi && git log --oneline 7303c282..HEAD` to see what changed since.
 >
-> **Covers:** pyiri::Traits, PyIRI Python submodule, ObsSpacePyiri, FieldsPyiri/StatePyiri, LETKF for ionosphere, field-line tracing, VTEC/slant TEC/electron density obs, CFFI Python↔Fortran bindings, custom interpolators for field-aligned geometry.
+> **Covers:** pyiri::Traits, PyIRI Python submodule, ObsSpacePyiri, ObsIterator, FieldsPyiri/StatePyiri, LETKF for ionosphere, field-line tracing, VTEC/slant TEC/electron density obs, CFFI Python↔Fortran bindings, custom interpolators for field-aligned geometry.
 
 ## Overview
 
@@ -63,8 +63,9 @@ Both expose Python interfaces via CFFI builders in `python/pyiri_jedi/`.
 - `ObsOpPointPyiri` — point observations at arbitrary locations
 - `ObsOpVtecPyiri` — Vertical Total Electron Content integration
 - `ObsOperatorTLAD` — tangent linear/adjoint operators
-- `ObsSpacePyiri`, `ObsVecPyiri`, `ObsDataPyiri` — obs containers
-- `ObsLocNull` — null obs localization (returns 1.0)
+- `ObsSpacePyiri`, `ObsVecPyiri`, `ObsDataPyiri` — obs containers (ObsSpacePyiri exposes `begin()`/`end()` returning `ObsIterator` for range-based iteration)
+- `ObsIterator` — forward iterator over observations, dereferences to `eckit::geometry::Point3` locations (stub added in PR #166, used by sequential ensemble solver work)
+- `ObsLocNull` — null obs localization (returns 1.0) via both `GeometryPyiriIterator` and `Point3`/`Point3` overloads, matching the ufo/oops `ObsLocalization` interface
 - `ObsErrorPyiri` — observation error covariance
 - `ObsFilter` — QC filtering
 - `GeoValsPyiri` — geo-referenced values at obs locations

@@ -99,6 +99,10 @@ If a repo reports a conflict or dirty state, report it to the user in the Phase 
 
 ## Phase 2: Analyze Changes
 
+**Always compare against `origin/develop`, never `HEAD`.** The docs describe what's on develop; a repo may be checked out on a feature branch whose HEAD carries unmerged feature-only work that must NOT influence doc updates. `analyze.sh` enforces this for you (via `COMPARE_REF`, default `origin/develop`) — do NOT recreate the diffs with `git log stored..HEAD` in the main thread. When you spawn deep-dive agents in Phase 3a, their prompts must also use `stored..origin/develop` (or the emitted `compare=` hash), never `stored..HEAD`.
+
+If you spot commits with messages like "Merge develop into feature/..." or a large diff that seems wildly out of proportion to recent activity, that's the tell: you're probably looking at feature-branch work. Re-check with `git -C bundle/<repo> branch --show-current` and rerun the comparison against `origin/develop`.
+
 Call the analyze script **once** with the list of documented repos:
 
 ```
@@ -109,18 +113,21 @@ Call the analyze script **once** with the list of documented repos:
 
 The script emits a block per repo:
 ```
-==REPO <name> stored=<h1> head=<h2> commits=<n> class=<label> STATUS=<s>==
+==REPO <name> stored=<stored> compare=<origin/develop> head=<HEAD> commits=<n> class=<label> STATUS=<s>==
 --LOG--
-<git log --oneline>
+<git log --oneline stored..origin/develop>
 --STAT--
-<git diff --stat>
+<git diff --stat stored..origin/develop>
 ```
+
+The `head=` field reflects the branch HEAD for context only — it is **not** used to compute the diff. All doc updates, hash bumps, and deep-dive diffs should reference `compare=` (origin/develop).
 
 ### STATUS values
 
-- `no-changes` — stored hash == HEAD. Skip, no doc work needed.
-- `changed` — there are new commits. Read the LOG and STAT.
+- `no-changes` — stored hash == origin/develop. Skip, no doc work needed.
+- `changed` — there are new commits on develop. Read the LOG and STAT.
 - `hash-not-found` — stored hash not in repo (amended/force-pushed history). Report and ask user.
+- `compare-ref-missing` — `origin/develop` not found (fetch didn't happen, or the repo uses a different default branch). Report; do not guess.
 - `no-doc` / `parse-error` / `repo-error` — report as action item.
 
 ### class values (auto-classification from changed file list)
@@ -177,14 +184,16 @@ Only dig in if Phase 1 reported new commits in repos whose `CMakeLists.txt` or b
 ### 3a. Deep-dive only `class=code` repos
 
 For each repo where content updates might be needed:
-- Read the header file(s) touched: `git -C bundle/<repo> diff <stored>..HEAD -- <path/to/file.h>`
+- Read the header file(s) touched: `git -C bundle/<repo> diff <stored>..origin/develop -- <path/to/file.h>`
 - Compare against the current `claude/<repo>.md` description
 - For new classes, read the new header to extract the public interface
 - For config changes, find example YAML configs
 
-**Parallelize with agents when 2+ repos need deep-dives.** Single prompt template:
+**Always diff against `origin/develop`, never `HEAD`** — see the Phase 2 warning. Use the `compare=` hash from the analyze-script block as the canonical endpoint.
 
-> Read the diff between `<stored-hash>` and HEAD in `bundle/<repo>` (focus on headers and any new files). Compare against the current `claude/<repo>.md`. Return a bulleted list of proposed edits (section + specific change + why) under 150 words. If nothing substantive changed, return "no content updates needed."
+**Parallelize with agents when 2+ repos need deep-dives.** Single prompt template (note the explicit `origin/develop` endpoint):
+
+> Read the diff between `<stored-hash>` and `origin/develop` in `bundle/<repo>` (do NOT use HEAD — the repo may be on a feature branch and unmerged work must be ignored). Focus on headers and any new files. Compare against the current `claude/<repo>.md`. Return a bulleted list of proposed edits (section + specific change + why) under 150 words. If nothing substantive changed, return "no content updates needed."
 
 For 0–1 repos with code changes, do it directly in the main thread — agent overhead isn't worth it.
 

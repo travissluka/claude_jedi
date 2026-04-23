@@ -4,15 +4,15 @@
 
 ## Sequential EnKF Feature (feature/sequential_enkf)
 
-**Status**: All PRs open, under review
-**Branch**: `feature/sequential_enkf` across 5 repos
+**Status**: ioda merged; oops/ufo/soca/pyiri-jedi PRs open, under review
+**Branch**: `feature/sequential_enkf` across 4 repos (ioda uses `develop`)
 
 ### PRs
 
 | Repo | PR | Title | Key Changes |
 |------|----|-------|-------------|
 | oops | [#3193](https://github.com/JCSDA-internal/oops/pull/3193) | Add sequential kalman filter framework, and EAKF | Core framework + EAKF solver |
-| ioda | [#1674](https://github.com/JCSDA-internal/ioda/pull/1674) | Add sequential kalman filter framework, and EAKF | `ioda::ObsIterator` class |
+| ioda | [#1674](https://github.com/JCSDA-internal/ioda/pull/1674) | Add sequential kalman filter framework, and EAKF | `ioda::ObsIterator` class — **MERGED** |
 | ufo | [#4027](https://github.com/JCSDA-internal/ufo/pull/4027) | Add sequential kalman filter framework, and EAKF | `computeLocalization(Point3, Point3)` on obs localization |
 | soca | [#1224](https://github.com/JCSDA-internal/soca/pull/1224) | Add sequential kalman filter framework, and EAKF | EAKF test, ObsLocRossby stub for Point3 interface |
 | pyiri-jedi | [#166](https://github.com/JCSDA-internal/pyiri-jedi/pull/166) | Add ObsIterator class stubs, and update ObsLocalization | Stubs only (not fully implemented) |

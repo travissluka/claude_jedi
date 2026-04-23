@@ -1,8 +1,16 @@
 #!/bin/bash
 # Analyze changes per repo since the hash stored in claude/<repo>.md line 3.
 # Usage: analyze.sh repo1 repo2 ...
-# Emits a ==REPO== block per repo with stored/head/commits/class/STATUS flags,
-# followed by --LOG-- and --STAT-- sections when STATUS=changed.
+#
+# Diffs stored hash against origin/develop — NOT HEAD. Docs describe what's
+# on develop; a repo may be checked out on a feature branch whose HEAD
+# carries unmerged feature-only work that must not influence doc updates.
+# The block emits both compare=<origin/develop short hash> (used for diffs)
+# and head=<HEAD short hash> (branch state, for context only).
+#
+# Emits a ==REPO== block per repo with stored/compare/head/commits/class/STATUS
+# flags, followed by --LOG-- and --STAT-- sections when STATUS=changed.
+# Override the comparison ref with COMPARE_REF env var if needed.
 
 set -u
 
@@ -10,6 +18,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="${PROJECT_ROOT:-$(cd "$SCRIPT_DIR/../../../.." && pwd)}"
 BUNDLE_ROOT="${BUNDLE_ROOT:-$PROJECT_ROOT/bundle}"
 DOCS_ROOT="${DOCS_ROOT:-$PROJECT_ROOT/claude}"
+COMPARE_REF="${COMPARE_REF:-origin/develop}"
 
 # Classify a newline-separated file list (on stdin) into one of:
 #   test-only   : only test/ files
@@ -75,28 +84,36 @@ for repo in "$@"; do
     continue
   fi
 
+  compare_hash=$(git -C "$dir" rev-parse --short=8 "$COMPARE_REF" 2>/dev/null)
+  if [[ -z "$compare_hash" ]]; then
+    printf "==REPO %s head=%s STATUS=compare-ref-missing compare_ref=%s==\n\n" \
+      "$repo" "$head_hash" "$COMPARE_REF"
+    continue
+  fi
+
   if ! git -C "$dir" rev-parse --verify "${stored}^{commit}" >/dev/null 2>&1; then
-    printf "==REPO %s stored=%s head=%s STATUS=hash-not-found==\n\n" \
-      "$repo" "$stored" "$head_hash"
+    printf "==REPO %s stored=%s compare=%s head=%s STATUS=hash-not-found==\n\n" \
+      "$repo" "$stored" "$compare_hash" "$head_hash"
     continue
   fi
 
   stored_full=$(git -C "$dir" rev-parse --short=8 "$stored" 2>/dev/null)
 
-  if [[ "$stored_full" == "$head_hash" ]]; then
-    printf "==REPO %s stored=%s head=%s STATUS=no-changes==\n\n" \
-      "$repo" "$stored_full" "$head_hash"
+  if [[ "$stored_full" == "$compare_hash" ]]; then
+    printf "==REPO %s stored=%s compare=%s head=%s STATUS=no-changes==\n\n" \
+      "$repo" "$stored_full" "$compare_hash" "$head_hash"
     continue
   fi
 
-  commits=$(git -C "$dir" log --oneline "${stored}..HEAD" 2>/dev/null)
+  # Diff stored..$COMPARE_REF (NOT stored..HEAD) — HEAD may be a feature branch.
+  commits=$(git -C "$dir" log --oneline "${stored}..${COMPARE_REF}" 2>/dev/null)
   count=$(printf '%s' "$commits" | grep -c .)
-  files=$(git -C "$dir" diff --name-only "${stored}..HEAD" 2>/dev/null)
-  stat=$(git -C "$dir" diff --stat "${stored}..HEAD" 2>/dev/null)
+  files=$(git -C "$dir" diff --name-only "${stored}..${COMPARE_REF}" 2>/dev/null)
+  stat=$(git -C "$dir" diff --stat "${stored}..${COMPARE_REF}" 2>/dev/null)
   class=$(printf '%s\n' "$files" | classify)
 
-  printf "==REPO %s stored=%s head=%s commits=%s class=%s STATUS=changed==\n" \
-    "$repo" "$stored_full" "$head_hash" "$count" "$class"
+  printf "==REPO %s stored=%s compare=%s head=%s commits=%s class=%s STATUS=changed==\n" \
+    "$repo" "$stored_full" "$compare_hash" "$head_hash" "$count" "$class"
   printf -- "--LOG--\n%s\n" "$commits"
   printf -- "--STAT--\n%s\n\n" "$stat"
 done

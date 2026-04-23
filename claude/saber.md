@@ -1,6 +1,6 @@
 # SABER (System for Atmospheric and Boundary Layer Error Representation)
 
-> Last updated against commit `8fc98110` (2026-04-21). Run `cd bundle/saber && git log --oneline 8fc98110..HEAD` to see what changed since.
+> Last updated against commit `8571579e` (2026-04-23). Run `cd bundle/saber && git log --oneline 8571579e..HEAD` to see what changed since.
 >
 > **Covers:** SaberCentralBlockBase, SaberOuterBlockBase, SaberParametricBlockChain, SaberEnsembleBlockChain, SaberHybridBlockChain, SaberOuterBlockChain, BUMP_NICAS, Diffusion/DiffusionImpl/DiffusionFilter, FastLAM, Bifourier, SpectralCovariance/Correlation/AnalyticalCorrelation, StdDev, VertLoc, DuplicateVariables, ID, GaussToCS, VaderBlock, TorchBalance, GSIBlockChain, QUENCH testbed, ErrorCovariance<MODEL>, ErrorCovarianceToolbox, ProcessPerts, Localization, multiply/multiplyAD/leftInverseMultiply/multiplySqrt, direct/iterative calibration, dirac tests, CoupledErrorCovariance.
 
@@ -54,6 +54,7 @@ Three chain types compose blocks into full covariance operators:
 **`SaberHybridBlockChain`** — Weighted combination of multiple covariances:
 - Outer blocks + weighted components (each a full covariance + weight)
 - Config key: `components` (array of `covariance` + `weight`)
+- Parallel-mode config key: `comm redistribution method` (string, default `"straight"`) — selects the algorithm for ATLAS field redistribution between parent and sub-communicators when running hybrid components on disjoint rank subsets. Internally calls `util::redistributeToSubcommunicator` / `util::gatherAndSumFromSubcommunicator`, which now delegate to `oops::CommRedistributionRepository` (PR #3196) so redistribution plans are constructed once and cached across multiply/adjoint/randomize calls. Public multiply API is unchanged.
 
 **`SaberOuterBlockChain`** — Sequences outer blocks, handles reverse-order adjoint application. Also used as the implementation basis for **filter blocks**: `NICASFilter`, `DiffusionFilter`, and `SpectralAnalyticalCorrelation` are central blocks that internally wrap a `SaberOuterBlockChain` to apply localization/correlation as a self-contained filter (replacing the older monolithic filter classes).
 
@@ -143,7 +144,7 @@ Other OOPS integration:
 
 ## QUENCH Testbed (`quench/`)
 
-Not a block — a pseudo-model for testing SABER blocks with any ATLAS grid. Implements minimal OOPS model types (Geometry, State, Increment, VariableChange) to enable running `ErrorCovarianceToolbox` and `ProcessPerts` without a real atmospheric model. Main executables: `quenchErrorCovarianceToolbox`, `quenchProcessPerts`, `quenchCoupledErrorCovarianceToolbox` (for testing the coupled covariance; uses `oops::TraitsCoupled<quench::Traits, quench::Traits>`). Enabled via `ENABLE_QUENCH` CMake option.
+Not a block — a pseudo-model for testing SABER blocks with any ATLAS grid. Implements minimal OOPS model types (Geometry, State, Increment, VariableChange) to enable running `ErrorCovarianceToolbox` and `ProcessPerts` without a real atmospheric model. Main executables: `quenchErrorCovarianceToolbox`, `quenchProcessPerts`, `quenchCoupledErrorCovarianceToolbox` (for testing the coupled covariance; uses `oops::TraitsCoupled<quench::Traits, quench::Traits>`), `quenchSubCommErrorCovarianceToolbox` (runs `ErrorCovarianceToolbox` on a subset of MPI ranks while leaving the remainder idle — exercises the parallel hybrid + `CommRedistributionRepository` paths, and simulates an IO-server-style rank layout). Enabled via `ENABLE_QUENCH` CMake option.
 
 ## Block Directory Reference
 

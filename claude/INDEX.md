@@ -11,7 +11,6 @@ Every per-repo and cross-cutting doc also has its own `> **Covers:** ...` line a
 | 3D-Var, 4D-Var, 4D-FGAT, 4D-Ens-Var, weak 4D-Var math/YAML/TLM needs | `oops.md` (#cost-functions) |
 | Minimizers (PCG/FGMRES/DRPCG/RPCG/RPLanczos/SaddlePoint/...) | `oops.md` (#minimizers) |
 | LETKF / GETKF (deterministic & stochastic), local volume solver | `oops.md` (#local-ensemble-solvers) |
-| Sequential EnKF (EAKF), SequentialEnsembleSolver | `active-projects.md` |
 | RTPP / RTPS / multiplicative inflation | `oops.md` (#ensemble-inflation-options) |
 | Nerger regulation for LETKF obs loc | `oops.md` (#local-ensemble-solvers) |
 | Cross-validation (subensembles) | `oops.md` (#cross-validation-localensembleda) |
@@ -112,10 +111,7 @@ Every per-repo and cross-cutting doc also has its own `> **Covers:** ...` line a
 
 ## Active / in-flight work
 
-| Topic | File |
-|-------|------|
-| Sequential EnKF PRs, EAKF, ObsIterator, Point3 loc | `active-projects.md` |
-| User-specific state (branches, followups, test subsets) | `MEMORY.md` at `~/.claude/projects/-home-tsluka-work-jedi/memory/` |
+In-flight feature work (PRs, branches, follow-ups, technical reference) lives in user memory rather than `claude/`, since the state changes faster than docs and is per-user. See `MEMORY.md` under `~/.claude-*/projects/-home-tsluka-work-jedi/memory/` and the `project_*.md` files it indexes.
 
 ## When in doubt
 

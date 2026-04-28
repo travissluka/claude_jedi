@@ -21,18 +21,12 @@ Architecture primer: `claude/cross-repo-interactions.md` (template contracts, Ge
 
 ```
 jedi/
-├── bundle/          # Baseline source, always on develop (do NOT drop Claude files here)
-├── build/           # Baseline build (ephemeral, do NOT edit)
-├── claude/          # Architecture docs (this CLAUDE.md points here)
-└── features/        # Parallel feature trees (gitignored); managed by `jft`
-    └── <name>/{bundle,build}
+├── bundle/          # Source (do NOT drop Claude files here)
+├── build/           # Build (ephemeral, do NOT edit)
+└── claude/          # Architecture docs (this CLAUDE.md points here)
 ```
 
 Working files go in `jedi/` or `jedi/claude/`, never `bundle/` or `build/`.
-
-## Feature trees
-
-Baseline `bundle/` + `build/` stay on develop. For multi-repo feature work, create a parallel tree with `.claude/skills/jft/scripts/jft new <name> <repo>:<branch> ...` — it worktrees the listed repos and symlinks the rest back to baseline. See the `jft` skill for the full workflow (or `.claude/skills/jft/scripts/jft --help`).
 
 ## Environment
 
@@ -90,7 +84,6 @@ Build is a DAG, not a chain — model-interface repos (fv3-jedi, soca, mpas-jedi
 | `ufo-filter-lifecycle.md` | filter stages (PRE/PRIOR/POST), where clause, actions, ObsFunctions |
 | `mpi-patterns.md` | commTime/commEns splitting, ensemble distribution, GetValues allToAll |
 | `build-and-test.md` | per-repo unique build flags, optional deps, test-naming quirks |
-| `active-projects.md` | in-flight feature work (PRs open/under review) |
 | `maintainers.md` | per-repo GitHub handles for ping/escalation on stalled PRs (sourced from `JCSDA-internal/github-admin` terraform) |
 | `pr-conventions.md` | PR-description annotations (`build-group=`, `run-ci-on-draft=`), CI re-trigger, common mistakes |
 | `INDEX.md` | keyword/symbol → file/section index |

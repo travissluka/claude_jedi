@@ -36,7 +36,7 @@ Reader/Writer factory pattern: `ReaderBase`/`WriterBase` with `ReaderFactory`/`W
 
 **`ioda`** (`src/`) — Higher-level JEDI/oops interface:
 - `ioda::ObsSpace` — main class; extends `oops::ObsSpaceBase`; manages the full lifecycle of obs data in a DA run (read on construction, optional write on destruction). Exposes `begin()`/`end()` returning `ioda::ObsIterator` for location-based traversal.
-- `ioda::ObsIterator` — forward iterator over obs locations; dereferences to `eckit::geometry::Point3(lon, lat, 0)`. Aliased as `IodaTrait::GeometryIterator` and used by oops sequential/local ensemble solvers for obs-obs and grid-obs localization.
+- `ioda::ObsIterator` — forward iterator over obs locations; dereferences to `eckit::geometry::Point3(lon, lat, 0)`. Aliased as `IodaTrait::GeometryIterator`.
 - `ioda::ObsVector` — observation vector for DA algorithms
 - `ioda::ObsDataVector<T>` — templated obs data container
 - `ioda::Distribution` (`src/distribution/`) — MPI distribution strategies: `RoundRobin`, `Halo`, `InefficientDistribution`, etc.

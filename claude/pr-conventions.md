@@ -116,7 +116,7 @@ Put `build-group=` lines inside the `## Dependencies` section, separated from th
 
 Strikethrough is the project's preferred convention because it preserves the record of cross-repo coordination for future readers reviewing the PR history.
 
-### Example: sequential EnKF (oops + ufo)
+### Worked example: a two-repo coordinated change (oops + ufo)
 
 State at PR-open time:
 - `ufo` PR — no `build-group=`. Its CI passes because its changes work against current `oops` on develop.

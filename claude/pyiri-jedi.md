@@ -64,7 +64,7 @@ Both expose Python interfaces via CFFI builders in `python/pyiri_jedi/`.
 - `ObsOpVtecPyiri` — Vertical Total Electron Content integration
 - `ObsOperatorTLAD` — tangent linear/adjoint operators
 - `ObsSpacePyiri`, `ObsVecPyiri`, `ObsDataPyiri` — obs containers (ObsSpacePyiri exposes `begin()`/`end()` returning `ObsIterator` for range-based iteration)
-- `ObsIterator` — forward iterator over observations, dereferences to `eckit::geometry::Point3` locations (stub added in PR #166, used by sequential ensemble solver work)
+- `ObsIterator` — forward iterator over observations, dereferences to `eckit::geometry::Point3` locations (stub)
 - `ObsLocNull` — null obs localization (returns 1.0) via both `GeometryPyiriIterator` and `Point3`/`Point3` overloads, matching the ufo/oops `ObsLocalization` interface
 - `ObsErrorPyiri` — observation error covariance
 - `ObsFilter` — QC filtering

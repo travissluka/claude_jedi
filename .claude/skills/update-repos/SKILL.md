@@ -174,6 +174,19 @@ Check whether changes affect the main `CLAUDE.md`:
 
 Only dig in if Phase 1 reported new commits in repos whose `CMakeLists.txt` or bundle-level config changed.
 
+### Build-dependency DAG check
+
+`claude/build-and-test.md` (`## Build dependency DAG`) records each repo's direct JEDI deps from top-level `find_package(... REQUIRED)` plus subdir `target_link_libraries(...)` for `coupling`. If any repo in this run has a class=code change that touches `CMakeLists.txt` or any `**/CMakeLists.txt` under it, re-derive the DAG via:
+
+```bash
+for r in oops vader saber ioda ufo fv3-jedi-lm fv3-jedi soca mpas-jedi pyiri-jedi coupling; do
+  echo "=== $r ==="
+  grep -E 'find_package\([[:space:]]*(oops|vader|saber|ioda|ufo|crtm|gsw|fv3jedilm|fv3-jedi|soca|MPAS|fv3jedi)[[:space:]]' bundle/$r/CMakeLists.txt
+done
+```
+
+For `coupling`, also `grep target_link_libraries bundle/coupling/test_mom6fv3/src/CMakeLists.txt`. If the result diverges from the table in `build-and-test.md`, propose an update as part of Phase 3.
+
 ---
 
 ## Phase 3: Update Docs

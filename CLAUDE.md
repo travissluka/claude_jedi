@@ -58,7 +58,7 @@ ctest --output-on-failure --test-dir build/<repo>
 
 Per-repo quirks (CMake flags, unique deps, test naming): `claude/build-and-test.md`.
 
-Build dependency order: `gsw → oops → vader → saber → ioda → ufo → crtm → fv3-jedi-lm → fv3-jedi → soca → mpas → mpas-jedi → coupling`. Bundle v8.0.0.
+Build is a DAG, not a chain — model-interface repos (fv3-jedi, soca, mpas-jedi, pyiri-jedi) are siblings on the same level. Full DAG with per-repo direct deps and a topologically-sorted parallel-build order: `claude/build-and-test.md` (#build-dependency-dag). Bundle v8.0.0.
 
 ## GitHub
 
@@ -92,6 +92,7 @@ Build dependency order: `gsw → oops → vader → saber → ioda → ufo → c
 | `build-and-test.md` | per-repo unique build flags, optional deps, test-naming quirks |
 | `active-projects.md` | in-flight feature work (PRs open/under review) |
 | `maintainers.md` | per-repo GitHub handles for ping/escalation on stalled PRs (sourced from `JCSDA-internal/github-admin` terraform) |
+| `pr-conventions.md` | PR-description annotations (`build-group=`, `run-ci-on-draft=`), CI re-trigger, common mistakes |
 | `INDEX.md` | keyword/symbol → file/section index |
 
 ### Keeping docs current

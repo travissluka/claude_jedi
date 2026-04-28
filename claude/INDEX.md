@@ -96,6 +96,7 @@ Every per-repo and cross-cutting doc also has its own `> **Covers:** ...` line a
 | Adjoint tests (dot-product), dirac, randomization | `testing-patterns.md`, `saber.md` |
 | Reference outputs (testref / testoutput) | `testing-patterns.md` |
 | Per-repo build flags & unique deps | `build-and-test.md` |
+| Build dependency DAG (find_package + link-time deps), parallel-build levels | `build-and-test.md` (#build-dependency-dag) |
 | Ctest patterns, lint (cpplint/pycodestyle) | `CLAUDE.md`, `build-and-test.md` |
 
 ## External knowledge
@@ -107,6 +108,7 @@ Every per-repo and cross-cutting doc also has its own `> **Covers:** ...` line a
 | spack-stack / JEDI version compatibility | `jedi-docs.md` |
 | YAML config reference with annotated examples | `jedi-docs.md` |
 | Per-repo maintainers (who to ping on stalled PRs) | `maintainers.md` |
+| PR description annotations (`build-group=`, `run-ci-on-draft=`) | `pr-conventions.md` |
 
 ## Active / in-flight work
 

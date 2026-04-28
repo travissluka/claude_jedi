@@ -111,7 +111,7 @@ Every per-repo and cross-cutting doc also has its own `> **Covers:** ...` line a
 
 ## Active / in-flight work
 
-In-flight feature work (PRs, branches, follow-ups, technical reference) lives in user memory rather than `claude/`, since the state changes faster than docs and is per-user. See `MEMORY.md` under `~/.claude-*/projects/-home-tsluka-work-jedi/memory/` and the `project_*.md` files it indexes.
+In-flight feature work (PRs, branches, follow-ups, technical reference) lives in user memory rather than `claude/`, since the state changes faster than docs and is per-user. See the per-project `MEMORY.md` index that Claude Code maintains, and the `project_*.md` files it points to.
 
 ## When in doubt
 

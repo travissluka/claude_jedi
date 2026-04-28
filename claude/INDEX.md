@@ -106,6 +106,7 @@ Every per-repo and cross-cutting doc also has its own `> **Covers:** ...` line a
 | JEDI git flow / PR process | `jedi-docs.md` |
 | spack-stack / JEDI version compatibility | `jedi-docs.md` |
 | YAML config reference with annotated examples | `jedi-docs.md` |
+| Per-repo maintainers (who to ping on stalled PRs) | `maintainers.md` |
 
 ## Active / in-flight work
 

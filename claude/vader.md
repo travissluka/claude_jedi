@@ -1,8 +1,8 @@
 # VADER (The VAriable DErivation Repository)
 
-> Last updated against commit `0605133a` (2026-04-02). Run `cd bundle/vader && git log --oneline 0605133a..HEAD` to see what changed since.
+> Last updated against commit `6e515f25` (2026-04-23). Run `cd bundle/vader && git log --oneline 6e515f25..HEAD` to see what changed since.
 >
-> **Covers:** Vader, RecipeBase, DefaultCookbook, VaderParameters, planVariable algorithm, _A/_B/_C recipe variants, changeVar/changeVarTraj/changeVarTL/changeVarAD, AirTemperature, DryAirDensity, HydrostaticPressure, RelativeHumidity, MoistureControl, Met Office SVP lookup tables (`src/mo/`), GSW OceanConversions, adjoint dot-product test pattern, adding a new recipe.
+> **Covers:** Vader, RecipeBase, DefaultCookbook, VaderParameters, planVariable algorithm, _A/_B/_C recipe variants, changeVar/changeVarTraj/changeVarTL/changeVarAD, AirTemperature, DryAirDensity, HydrostaticPressure, RelativeHumidity, MoistureControl, Met Office SVP lookup tables (`src/mo/`), DustBin1MassConcentration_A, DustBin2MassConcentration_A, eval_dust_bin_mass_concentration_nl, GSW OceanConversions, adjoint dot-product test pattern, adding a new recipe.
 
 ## Overview
 
@@ -67,7 +67,8 @@ This allows different models to use the variant matching their available state v
 VADER recipes may require external configuration parameters (passed via `VaderParameters` in YAML):
 - **`nLevels`** — number of vertical levels
 - **`ak`/`bk`** coefficients — hybrid sigma-pressure vertical coordinate arrays (define pressure at each level as `p = ak + bk * ps`)
-- Physical constants defined in `src/vader/` and `src/mo/`: `Rd` (gas constant dry air), `Cp` (specific heat), `Lv` (latent heat of vaporization), `epsilon` (Rd/Rv ratio), `grav` (gravitational acceleration)
+- Physical constants defined in `src/vader/` and `src/mo/`: `Rd` (gas constant dry air), `Cp` (specific heat), `Lv` (latent heat of vaporization), `epsilon` (Rd/Rv ratio), `grav` (gravitational acceleration), `k_B` (Boltzmann)
+- GLOMAP dust constants in `src/mo/constants.h` (used by DustBin recipes): `glomap_dust_density`, `sigma_acc`, `sigma_coarse`, `Dmin_bin1/Dmax_bin1`, `Dmin_bin2/Dmax_bin2`
 
 ## Variable Naming Conventions
 
@@ -93,7 +94,7 @@ VADER follows JEDI naming standards (from jedi-docs conventions):
 
 **Wind** (3): EastwardWindAt10m, NorthwardWindAt10m, WindReductionFactorAt10m
 
-**Aerosol** (4): ParticulateMatter2p5 (2), SulfateMassFraction, RainMixingRatio
+**Aerosol** (6): ParticulateMatter2p5 (2), SulfateMassFraction, RainMixingRatio, DustBin1MassConcentration_A, DustBin2MassConcentration_A (NL-only; LFRIC UKCA/GLOMAP 2-mode → CLASSIC 2-bin dust; products `mass_fraction_of_dust00{1,2}_in_air`; eval in `src/mo/eval_dust_2bin_mass_concentration.{h,cc}`)
 
 **Water totals** (5): TotalWater, TotalWaterMixingRatio (dry/wet), TotalRelativeHumidity (2)
 
@@ -143,8 +144,9 @@ Key patterns:
 | Directory | Purpose |
 |-----------|---------|
 | `src/vader/` | Core: `vader.h/cc`, `RecipeBase.h/cc`, `DefaultCookbook.h`, `VaderParameters.h` |
-| `src/vader/recipes/` | All recipe implementations (~47 headers + .cc files) |
+| `src/vader/recipes/` | Core recipe implementations (~47 headers + .cc files) |
 | `src/mo/` | Met Office integration: lookup tables (SVP), eval functions, constants, Fortran I/O |
+| `src/mo/recipes/` | Met Office-derived recipes (e.g., `DustBin1MassConcentration`, `DustBin2MassConcentration`) |
 | `src/OceanConversions/` | GSW (Gibbs SeaWater) Fortran bindings for ocean recipes |
 
 ## Fortran vs C++ Split

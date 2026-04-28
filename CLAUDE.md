@@ -21,12 +21,18 @@ Architecture primer: `claude/cross-repo-interactions.md` (template contracts, Ge
 
 ```
 jedi/
-├── bundle/          # Source (git-managed, do NOT drop Claude files here)
-├── build/           # Out-of-source build (ephemeral, do NOT edit)
-└── claude/          # Architecture docs (this CLAUDE.md points here)
+├── bundle/          # Baseline source, always on develop (do NOT drop Claude files here)
+├── build/           # Baseline build (ephemeral, do NOT edit)
+├── claude/          # Architecture docs (this CLAUDE.md points here)
+└── features/        # Parallel feature trees (gitignored); managed by `jft`
+    └── <name>/{bundle,build}
 ```
 
 Working files go in `jedi/` or `jedi/claude/`, never `bundle/` or `build/`.
+
+## Feature trees
+
+Baseline `bundle/` + `build/` stay on develop. For multi-repo feature work, create a parallel tree with `.claude/skills/jft/scripts/jft new <name> <repo>:<branch> ...` — it worktrees the listed repos and symlinks the rest back to baseline. See the `jft` skill for the full workflow (or `.claude/skills/jft/scripts/jft --help`).
 
 ## Environment
 
@@ -85,6 +91,7 @@ Build dependency order: `gsw → oops → vader → saber → ioda → ufo → c
 | `mpi-patterns.md` | commTime/commEns splitting, ensemble distribution, GetValues allToAll |
 | `build-and-test.md` | per-repo unique build flags, optional deps, test-naming quirks |
 | `active-projects.md` | in-flight feature work (PRs open/under review) |
+| `maintainers.md` | per-repo GitHub handles for ping/escalation on stalled PRs (sourced from `JCSDA-internal/github-admin` terraform) |
 | `INDEX.md` | keyword/symbol → file/section index |
 
 ### Keeping docs current

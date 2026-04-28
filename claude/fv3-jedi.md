@@ -1,8 +1,8 @@
 # FV3-JEDI
 
-> Last updated against commit `66485a3a` (2026-04-20). Run `cd bundle/fv3-jedi && git log --oneline 66485a3a..HEAD` to see what changed since.
+> Last updated against commit `14900e35` (2026-04-23). Run `cd bundle/fv3-jedi && git log --oneline 14900e35..HEAD` to see what changed since.
 >
-> **Covers:** fv3jedi::Traits, fv3jedi::{Geometry,State,Increment,Model,LinearModel,VariableChange,LinearVariableChange,ModelBias,ModelData}, FV3_FORECAST_MODEL backends (GEOS/UFS/FV3CORE), cubed-sphere geometry, LAM support, FV3LM linear model, GFS/GEOS I/O backends, FV3-JEDI/FMS interop, opaque-handle Fortran pattern.
+> **Covers:** fv3jedi::Traits, fv3jedi::{Geometry,State,Increment,Model,LinearModel,VariableChange,LinearVariableChange,ModelBias,ModelData}, FV3_FORECAST_MODEL backends (GEOS/UFS/FV3CORE), cubed-sphere geometry, LAM support, FV3LM linear model, GFS/GEOS I/O backends, FV3-JEDI/FMS interop, opaque-handle Fortran pattern, VertRemap (lapse-rate vertical remap after horizontal interpolation).
 
 ## Overview
 
@@ -32,13 +32,17 @@ Maps all oops abstract types to fv3jedi implementations:
 ### Geometry (`Geometry/`)
 Manages cubed-sphere grid: dimensions (npx, npy, npz), ntiles (6 for global), vertical hybrid coordinates (ak/bk), FMS initialization. Fortran modules handle FV3 grid generation (`fv3_control.F90`, `fv3_grid_tools.F90`, `fv3_eta.F90`, `fv3_mp_mod.F90`).
 
-Key config: `akbk` file path, `layout` (MPI decomposition), `io_layout`, `field table`, `namelist`.
+Key config: `akbk` file path, `layout` (MPI decomposition), `io_layout`, `field table`, `namelist`, `do vertical remapping` (bool, default false — enables lapse-rate vertical remap after horizontal interpolation in `State::changeResolution`).
+
+Geometry exposes `doVerticalRemapping()` for consumers (`State`, `IOStructuredGrid`) to query the flag.
 
 ### State / Increment (`State/`, `Increment/`)
 Hold variables at a datetime via ATLAS FieldSet. State supports `read()`, `write()`, `analytic_init()` (DCMIP test cases). Increment provides linear algebra (`axpy`, `dot_product_with`, `schur_product_with`, `dirac`), serialization for MPI, and `getLocal`/`setLocal` for localization.
 
+When `geom.doVerticalRemapping()` is true, `State::changeResolution()` invokes `fv3jedi::VertRemap` after horizontal interpolation; this requires `surface_geopotential_height` to be present in the target geometry's fields.
+
 ### Fields & FieldMetadata (`Fields/`, `FieldMetadata/`)
-`FieldsMetadata` describes each field: long name, levels, data kind (R4/R8), tracer flag, units, mathematical space. `FieldsMetadataDefault.h` provides defaults for GEOS/GFS.
+`FieldsMetadata` describes each field: long name, levels, data kind (R4/R8), tracer flag, units, mathematical space. `FieldsMetadataDefault.h` provides defaults for GEOS/GFS, including `ln_air_pressure` (full-levels; consumed by VertRemap via the Vader `LnAirPressure_A` recipe).
 
 ### Model (`Model/`)
 `ModelWrapper` dispatches to concrete implementations via factory:
@@ -59,7 +63,12 @@ Interface: `initialize(State&)`, `step(State&, ModelBias&)`, `finalize(State&)`.
 
 Fortran helper modules in `Utils/`: `pressure_variables_mod.f90`, `temperature_variables_mod.f90`, `moisture_variables_mod.f90`, `height_variables_mod.f90`, `wind_variables_mod.f90`, `surface_variables_mod.f90`.
 
+`VaderCookbook.h` registers the fv3-jedi Vader extensions (incl. the `ln_air_pressure` recipe path used by VertRemap).
+
 FEMPS (Finite Element Multigrid Pressure Solver) in `femps/` for geopotential calculation.
+
+### Vertical Remapping (`Utilities/fv3jedi_vertical_remap.{h,cc}`)
+`VertRemap` — 454-line reusable remap utility driven by Vader to build `ln_air_pressure` from source and target orography, then remaps fields with lapse-rate extrapolation (β = −6.5e-3 K/m, ε = 1e-9). Invoked by `State::changeResolution` and by `IOStructuredGrid` to account for orography changes after horizontal interpolation.
 
 ### I/O System (`IO/`)
 `IOBase` abstract factory with three backends:
@@ -68,6 +77,8 @@ FEMPS (Finite Element Multigrid Pressure Solver) in `femps/` for geopotential ca
 - **StructuredGrid** (`IOStructuredGrid`) — interpolated regular lat/lon via GlobalInterpolator
 
 Config key: `filetype` in YAML (`fv3 restart`, `cube sphere history`, `structured grid`).
+
+`IOStructuredGrid` supports vertical remapping on write via `do vertical remapping: true` + `orography filename: <nc>`; it reads the target orography through a new `readStructuredFields()` NetCDF path and applies `VertRemap` before writing.
 
 ### ErrorCovariance (`ErrorCovariance/`)
 Delegates to SABER for background error covariance.

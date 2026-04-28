@@ -12,7 +12,7 @@ When preparing a PR for the author's review, follow this sequence:
 
 1. **Draft the full PR text** (title + body following the template structure below) and surface it in chat for review *before* calling `gh pr create`. Do not open the PR until the user has approved the wording.
 2. Along with the body, propose:
-   - **Reviewers** — pull candidates from `claude/maintainers.md` for the affected repo, filter out the user themselves, and rank by topical relevance (e.g., for an obs change, the UFO maintainers come first). Note: do NOT assign reviewers yet; reviewer assignment waits until CI is green.
+   - **Reviewers** — pull candidates from `git -C bundle/<repo> log --format='%an' --since=<recent> -- <changed-paths> | sort | uniq -c | sort -rn`. Surface the top contributors to the affected files, with commit counts. `claude/maintainers.md` is the **admin/escalation** list, not a review pool — most reviewers are topical contributors who aren't on it. Use a maintainer name only when they are independently topically relevant. Filter out the PR author. Do NOT assign reviewers yet; assignment waits until CI is green.
    - **Labels** — propose a label only when one clearly applies. `bug` is the only actively-curated label; everything else is optional. If unsure, leave label suggestion empty.
 3. Once approved, open the PR with `gh pr create`, including:
    - `--assignee <user>` — the PR is always self-assigned to the author
@@ -155,7 +155,7 @@ Only `bug` is actively curated — apply it when the PR fixes incorrect behavior
 ## Reviewer assignment
 
 - Assignee: the PR author (self-assignment is the convention; see Authoring workflow above).
-- Reviewers: chosen from the repo's maintainer list in `claude/maintainers.md`, plus topically-relevant contributors. Assigned only **after CI is green** — earlier requests waste reviewer attention if the build then breaks.
+- Reviewers: chosen from recent contributors to the changed files (`git log --format='%an' -- <paths>`); maintainers from `claude/maintainers.md` only when independently topically relevant. Assigned only **after CI is green** — earlier requests waste reviewer attention if the build then breaks.
 
 ## Other PR-body conventions
 

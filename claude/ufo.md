@@ -1,6 +1,6 @@
 # UFO (Unified Forward Operators)
 
-> Last updated against commit `0e0b4b0b` (2026-04-28). Run `cd bundle/ufo && git log --oneline 0e0b4b0b..HEAD` to see what changed since.
+> Last updated against commit `d829259d` (2026-04-29). Run `cd bundle/ufo && git log --oneline d829259d..HEAD` to see what changed since.
 >
 > **Covers:** ObsOperator, LinearObsOperator, CompositeObsOperator, GeoVaLs, SampledLocations, ObsFilters, ObsBias, ObsDiagnostics, ObsError (Diagonal/CrossVarCov/BiasCorrelated/WithinGroup), ObsLocalization (Hor/HorGC99/HorSOAR/VertLocalization), QCflags, ObsFunctions, variable transforms, FilterBase, QCmanager, FinalCheck (see also `ufo-filter-lifecycle.md`), ObsTraits, CRTM/RTTOV integration.
 

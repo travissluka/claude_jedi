@@ -1,8 +1,8 @@
 # OOPS (Object Oriented Prediction System)
 
-> Last updated against commit `c1ffd7cb` (2026-04-27). Run `cd bundle/oops && git log --oneline c1ffd7cb..HEAD` to see what changed since.
+> Last updated against commit `444b5967` (2026-04-28). Run `cd bundle/oops && git log --oneline 444b5967..HEAD` to see what changed since.
 >
-> **Covers:** Variational, CostFunction, CostFct3DVar/3DFGAT/4DVar/WC4DVar/4DEnsVar, CostJo, CostJb3D/4D/Jq, Minimizer (PCG/DRPCG/FGMRES/RPCG/...), LocalEnsembleSolver, LETKF/GETKF (Deterministic/Stochastic), LocalEnsembleDA, Observer, Observers, Variables, FieldSet3D/4D, FieldSets, IncrementSet, StateSet, GeometryData, PseudoModel, CommRedistribution, CommRedistributionRepository, FieldSetSubCommunicators, Application runs (Forecast/HofX/EDA/GenEnsPertB/...), inflation (RTPP/RTPS/mult), cross-validation, Nerger regulation, L95/QG toy models.
+> **Covers:** Variational, CostFunction, CostFct3DVar/3DFGAT/4DVar/WC4DVar/4DEnsVar, CostJo, CostJb3D/4D/Jq, Minimizer (PCG/DRPCG/FGMRES/RPCG/...), LocalEnsembleSolver, LETKF/GETKF (Deterministic/Stochastic), SequentialEnsembleSolver/EAKF, LocalEnsembleDA, Observer, Observers, Variables, FieldSet3D/4D, FieldSets, IncrementSet, StateSet, GeometryData, PseudoModel, CommRedistribution, CommRedistributionRepository, FieldSetSubCommunicators, Application runs (Forecast/HofX/EDA/GenEnsPertB/...), inflation (RTPP/RTPS/mult), cross-validation, Nerger regulation, L95/QG toy models.
 
 ## Overview
 
@@ -16,7 +16,7 @@ Build/test quirks in `claude/build-and-test.md`.
 |-----------|---------|
 | `interface/` | Thin template wrappers delegating to `MODEL::*` / `OBS::*` implementations (e.g., `interface::State<MODEL>`, `interface::Geometry<MODEL>`). These enforce timing, logging, and the API contract. |
 | `base/` | Higher-level OOPS objects built on `interface/` (e.g., `oops::State<MODEL>`, `FieldSet3D`, `FieldSets`, `Variables`, `GeometryData`, `IncrementSet`, `StateSet`). This is where most algorithmic logic lives. |
-| `assimilation/` | DA algorithms: cost functions (`CostFunction`, `CostFct3DVar`, `CostFct4DEnsVar`), minimizers (17 total), and local ensemble solvers (4 total). |
+| `assimilation/` | DA algorithms: cost functions (`CostFunction`, `CostFct3DVar`, `CostFct4DEnsVar`), minimizers (17 total), and local ensemble solvers (5 total). |
 | `runs/` | Top-level `Application` subclasses that serve as entry points: `Variational`, `Forecast`, `LocalEnsembleDA`, `HofX3D`, `HofX4D`, `EDA`, etc. Each `Application::execute()` reads a YAML config and runs end-to-end. |
 | `generic/` | Model-independent implementations: `IdentityModel`, `HybridLinearModel`, `AtlasInterpolator`, FFT utilities, HTLM tools. |
 | `util/` | Utilities: `DateTime`, `Duration`, `Logger`, `ConfigFunctions`, MPI helpers, Fortran interop. Includes `Factory.h` (generic factory template with variadic maker args). |
@@ -60,7 +60,7 @@ Three families, all configured via `variational: { algorithm: "<name>" }` in YAM
 
 **DR (Derber-Rosati)** — uses auxiliary variable with B⁻¹x: `DRPCG`, `DRIPCG`, `DRPLanczos`, `DRPBlockLanczos`, `DRPFOM`, `DRGMRESR`, `LBGMRESR`
 
-## Local Ensemble Solvers (4 total)
+## Local Ensemble Solvers (5 total)
 
 Configured via `local ensemble DA: { solver: "<name>" }`:
 
@@ -70,8 +70,11 @@ Configured via `local ensemble DA: { solver: "<name>" }`:
 | `Stochastic LETKF` | LETKF with perturbed observations |
 | `Deterministic GETKF` | Generalized ETKF with model-space localization (Lei 2018) |
 | `Stochastic GETKF` | GETKF with perturbed observations |
+| `EAKF` | Ensemble Adjustment Kalman Filter — sequential scalar-obs update (Anderson 2003); derives from new `SequentialEnsembleSolver` base class |
 
-All 4 solvers use `LocalEnsembleSolver` (iterate over grid points, solve local analysis). The `ObsLocalization::computeLocalization(GeometryIterator, ObsVector)` interface drives observation-space R-localization. Optional **Nerger et al. (2012) regulation factor** for LETKF obs localization: enabled via `local ensemble DA.use nerger regulation: true` (default `false`); applies only to diagonal R; computed per-observation in `LocalEnsembleSolver::computeNergerLocalR()`. Tested with `letkf_nerger_localization` (L95).
+LETKF and GETKF derive from `LocalEnsembleSolver` (iterate over grid points, solve local analysis using all nearby obs at once). They drive obs-space R-localization through `ObsLocalization::computeLocalization(GeometryIterator, ObsVector)`. Optional **Nerger et al. (2012) regulation factor** for LETKF obs localization: enabled via `local ensemble DA.use nerger regulation: true` (default `false`); applies only to diagonal R; computed per-observation in `LocalEnsembleSolver::computeNergerLocalR()`. Tested with `letkf_nerger_localization` (L95).
+
+EAKF derives from `SequentialEnsembleSolver` (iterate over observations, update one obs at a time against all model state points within localization radius). Uses the new scalar `ObsLocalization::computeLocalization(Point3, Point3) → double` (0.0–1.0) interface to evaluate point-to-point localization for each obs/state pair. Tested with `sequential_enkf` (L95, QG).
 
 ## Cost Functions (5 total)
 

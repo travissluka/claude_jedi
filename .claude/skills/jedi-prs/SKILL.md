@@ -3,12 +3,12 @@ name: jedi-prs
 description: >-
   Coordinate multi-repo PRs across JCSDA-internal repos. Handles change analysis,
   merge-order reasoning, build-group selection, body drafting, opening, and the
-  multi-day follow-up flow (draft→ready, strikethrough stale build-groups). State
+  multi-day follow-up flow (draft→ready, drop stale build-groups). State
   is persisted in a memory file so a workflow that spans a CI cycle (hours) can
   be resumed across conversations.
   Use when: the user is preparing PRs for a feature that touches multiple bundle
   repos, or wants to resume / inspect / mutate an in-flight coordinated PR set.
-argument-hint: "[<slug> [<repo:branch> ...] | <slug> [--show|--ready <repo>|--strikethrough <repo> <url>] | --list]"
+argument-hint: "[<slug> [<repo:branch> ...] | <slug> [--show|--ready <repo>|--drop <repo> <url>] | --list]"
 allowed-tools:
   - Bash
   - Read
@@ -35,7 +35,7 @@ Codifies the rules in `claude/pr-conventions.md` end-to-end so they are applied 
 | `<slug>` (state file exists) | **Resume**: reconcile and propose next steps |
 | `<slug> --show` | Read-only: reconcile + status table, then stop |
 | `<slug> --ready <repo>` | Convert that repo's PR from draft → ready |
-| `<slug> --strikethrough <repo> <full-pr-url>` | Disable a stale `build-group=` line |
+| `<slug> --drop <repo> <full-pr-url>` | Remove a stale `build-group=` line |
 | `--list` | List all `project_*_prs.md` state files with phase |
 
 If `<slug>` has no state file and no `<repo:branch>` args were provided, error out with usage.
@@ -240,7 +240,7 @@ User can interrupt between merge-order groups and resume later.
    Sort rows by `merge_order` ascending (then by repo name within a level). Render `build_groups` as `repo#PR` shorthand for compactness; full URLs only in state.
 6. If `--show`: **stop here. Do not write to the state file.** Otherwise propose actionable next steps:
    - "All level-N CI green → ready to open level-(N+1)?"
-   - "Upstream PR `<repo>#<n>` merged → strikethrough downstream `build-group=` lines that point at it?"
+   - "Upstream PR `<repo>#<n>` merged → drop downstream `build-group=` lines that point at it?"
    - "Draft `<repo>#<n>` CI is green → convert to ready?"
    - "Failing CI on `<repo>#<n>` → investigate before next step."
 
@@ -250,11 +250,11 @@ User can interrupt between merge-order groups and resume later.
 2. `gh pr ready <n> -R JCSDA-internal/<repo>`
 3. Update state: `is_draft: false`. Append decision log line.
 
-### `--strikethrough <repo> <full-pr-url>`
+### `--drop <repo> <full-pr-url>`
 
 1. Canonicalize `<full-pr-url>` to `https://github.com/JCSDA-internal/<repo>/pull/<n>`.
 2. `gh pr view <state-pr> -R JCSDA-internal/<repo> --json body --jq .body > /tmp/jedi-prs-<slug>-<repo>-body.md`
-3. In the file, replace the line `build-group=<full-pr-url>` with `~~build-group=<full-pr-url>~~`. If the line is already struck or not found, surface to user.
+3. In the file, delete the line `build-group=<full-pr-url>` entirely. If the line is not found, surface to user.
 4. Show diff to user.
 5. On approval:
    ```bash

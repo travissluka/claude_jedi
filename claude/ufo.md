@@ -1,6 +1,6 @@
 # UFO (Unified Forward Operators)
 
-> Last updated against commit `d19d90b0` (2026-04-28). Run `cd bundle/ufo && git log --oneline d19d90b0..HEAD` to see what changed since.
+> Last updated against commit `0e0b4b0b` (2026-04-28). Run `cd bundle/ufo && git log --oneline 0e0b4b0b..HEAD` to see what changed since.
 >
 > **Covers:** ObsOperator, LinearObsOperator, CompositeObsOperator, GeoVaLs, SampledLocations, ObsFilters, ObsBias, ObsDiagnostics, ObsError (Diagonal/CrossVarCov/BiasCorrelated/WithinGroup), ObsLocalization (Hor/HorGC99/HorSOAR/VertLocalization), QCflags, ObsFunctions, variable transforms, FilterBase, QCmanager, FinalCheck (see also `ufo-filter-lifecycle.md`), ObsTraits, CRTM/RTTOV integration.
 
@@ -114,7 +114,7 @@ VarBC state is persisted to/from files via `ObsBiasCoeffs` for cycling across DA
 - **`src/ufo/profile/`**: Routines for handling vertical profile data (e.g., radiosonde).
 - **`src/ufo/variabletransforms/`**: ~32 variable transforms invoked via `Variables Transform` filter. Base class `TransformBase` with factory. Categories: humidity (`Cal_Humidity`), pressure/height (`Cal_PressureFromHeight`, `Cal_HeightFromPressure`, `Cal_PStar`), wind (`Cal_Wind`), satellite (`Cal_SatBrightnessTempFromRad`, `Cal_SatRadianceFromPCScores`), radar (`Cal_RadarBeamGeometry`), ocean (`OceanDensity`, `OceanTempToTheta`), surface wind scaling. Separate from ObsFunctions — transforms modify obs space and save to `DerivedObsValue` group.
 - **`src/ufo/utils/`**: Shared utilities: interpolation, geometry calculations, distance calculators, bin selectors, string utilities, Met Office-specific utilities.
-- **`src/ufo/obslocalization/`**: 4 localization methods for ensemble DA. `ObsHorLocalization` (box car, KD-tree search), `ObsHorLocGC99` (Gaspari-Cohn smooth taper), `ObsHorLocSOAR` (second-order autoregressive), `ObsVertLocalization` (1D vertical with box car/GC99/SOAR functions). All support configurable lengthscale, max obs count, and caching.
+- **`src/ufo/obslocalization/`**: 4 localization methods for ensemble DA. `ObsHorLocalization` (box car, KD-tree search), `ObsHorLocGC99` (Gaspari-Cohn smooth taper), `ObsHorLocSOAR` (second-order autoregressive), `ObsVertLocalization` (1D vertical with box car/GC99/SOAR functions). All support configurable lengthscale, max obs count, and caching. `ObsLocalizationBase` exposes two virtual `computeLocalization` overloads: the original `(GeometryIterator, ObsVector&)` form (used by LETKF/GETKF for vector R-localization) and a scalar `(Point3, Point3) → double` form (used by `oops::SequentialEnsembleSolver`/EAKF for point-to-point localization). The Point3 overload has a default implementation that ABORTs; `ObsHorLocalization`, `ObsHorLocGC99`, and `ObsHorLocSOAR` override it.
 - **`src/ufo/errors/`**: 5 observation error R matrix implementations. `ObsErrorDiagonal` (simple diagonal), `ObsErrorWithinGroupCov` (correlations within profile/record groups via GC99/Markov/Gaussian functions; supports `applyBasicReconditioning` for ridge regression conditioning of the gaussian correlation profile), `ObsErrorCrossVarCov` (cross-variable correlations from file; supports R-localisation — extracts a local cross-variable block per location from the full correlation matrix), `ObsErrorDiagonalInvGamma` (Bayesian inverse-gamma prior), `ObsErrorDiffusion` (diffusion-based correlated obs error covariance using `oops::Diffusion`; models R = D^{1/2} C D^{1/2} where C is a Gaspari-Cohn correlation applied via diffusion, with iterative inverse via GMRESR; optional `control grid` sub-config with `grid spacing` and `remove within` parameters to create a coarser mesh for the diffusion operator). Plus `ObsErrorReconditioner` for numerical conditioning.
 
 ### C++/Fortran Interoperability Pattern
@@ -124,7 +124,7 @@ Fortran modules are wrapped with C-compatible interfaces in `*.interface.F90` / 
 ### OOPS Framework Integration
 
 UFO integrates with oops via `ObsTraits` (`src/ufo/ObsTraits.h`), which bundles types from **both UFO and IODA** for template instantiation by oops:
-- From **ioda**: `ObsSpace`, `ObsVector`, `ObsDataVector<T>`
+- From **ioda**: `ObsSpace`, `ObsVector`, `ObsDataVector<T>`, `GeometryIterator` (= `ioda::ObsIterator`, used by sequential ensemble solvers)
 - From **ufo**: `ObsOperator`, `LinearObsOperator`, `GeoVaLs`, `ObsFilters`, `ObsError`, `ObsBias`, `ObsDiagnostics`, `SampledLocations`
 
 Model repos instantiate algorithms as e.g. `oops::Variational<fv3jedi::Traits, ufo::ObsTraits>`.

@@ -2,7 +2,7 @@
 
 > Cheat-sheet for writing JCSDA-internal pull request descriptions correctly.
 >
-> **Covers:** PR authoring workflow (review before opening, self-assignment, reviewer-after-CI), PR template structure, Dependencies section content (depends-on / depended-by / build-groups), determining merge order from code-change content (not just the build-DAG), strikethrough convention for disabling stale build-groups as upstreams merge, `build-group=` and `run-ci-on-draft=` annotation syntax, draft-mode workflow for circular cross-repo dependencies, CI re-trigger via empty commit, prose-reference syntax for cross-repo PRs, labels.
+> **Covers:** PR authoring workflow (review before opening, self-assignment, reviewer-after-CI), PR template structure, Dependencies section content (depends-on / depended-by / build-groups), determining merge order from code-change content (not just the build-DAG), disabling stale build-groups as upstreams merge, `build-group=` and `run-ci-on-draft=` annotation syntax, draft-mode workflow for circular cross-repo dependencies, CI re-trigger via empty commit, prose-reference syntax for cross-repo PRs, labels.
 
 Canonical jedi-docs source: `bundle/jedi-docs/docs/working-practices/testing.rst` — section "Testing Development across Multiple Repositories". This file is a distilled local copy of the rules + a record of the project's preferred PR-authoring conventions.
 
@@ -65,17 +65,17 @@ The template only asks for "PRs this PR depends on," but the project convention 
 ## Dependencies
 
 This PR depends on:
-- [ ] https://github.com/JCSDA-internal/oops/pull/3275
+- https://github.com/JCSDA-internal/oops/pull/3275
 
 PRs that depend on this PR (must merge after this one):
-- [ ] https://github.com/JCSDA-internal/jedi-docs/pull/1028
+- https://github.com/JCSDA-internal/jedi-docs/pull/1028
 
 build-group=https://github.com/JCSDA-internal/oops/pull/3275
 ```
 
 Notes:
 - Use **full GitHub URLs**, not `JCSDA-internal/<repo>#<n>` shorthand or bare `#<n>` (bare `#<n>` would autolink to the current repo and break).
-- Checkbox `- [ ]` form is fine for the two prose lists — these are for human reading, not the CI parser.
+- Plain bullet `- <url>` for the two prose lists — GitHub renders these with PR status icons; `- [ ]` checkbox form is not needed.
 - **Keep `build-group=` lines minimal.** Only include another PR if this PR's bundle build would otherwise fail. Listing every related PR in `build-group=` wastes CI capacity and makes failures harder to diagnose. The "depends on" / "depended by" prose lists are the place to record the *full* relationship; `build-group=` is the place to record only what CI actually needs to compile-and-test together.
 - If this PR has no cross-repo dependencies at all, still write the `## Dependencies` heading and put `n/a` underneath.
 
@@ -107,14 +107,9 @@ Put `build-group=` lines inside the `## Dependencies` section, separated from th
 
 `build-group=` annotations are **not static**. As each PR in a coordinated set merges, the remaining PRs no longer need their `build-group=` lines pointing at it (the matching changes are now on `develop` and get pulled into CI bundles automatically). **Disabling stale annotations is mandatory** — leaving a `build-group=` line referencing an already-merged PR breaks CI on the referencing PR (the resolver fails to fetch a merged-and-deleted branch). Disable, retrigger CI to confirm green, then merge.
 
-### Two ways to disable a `build-group=` line
+### Disabling a `build-group=` line
 
-| Method | Markdown | Effect |
-|---|---|---|
-| Strikethrough (preferred) | `~~build-group=https://github.com/...~~` | The `~~` prefix breaks the bare-line match → CI ignores the annotation. The line stays visible in the PR body as a record of the original coordination. |
-| Delete | (remove the line) | Annotation gone from CI's view *and* from the PR body. Slightly cleaner; loses the historical trace. |
-
-Strikethrough is the project's preferred convention because it preserves the record of cross-repo coordination for future readers reviewing the PR history.
+Delete the line entirely. Do not use `~~build-group=...~~` (strikethrough) — the `~~` prefix has caused test failures in some CI configurations.
 
 ### Worked example: a two-repo coordinated change (oops + ufo)
 
@@ -126,7 +121,7 @@ Merge sequence:
 
 1. **Confirm `ufo` PR CI is green** → merge `ufo` first (it's independently mergeable).
 2. After `ufo` merges, the matching changes are on `ufo` develop. The `oops` PR no longer needs to *pull in* the ufo PR — develop already has it. Leaving the now-stale `build-group=` line active would break the next CI run on `oops`.
-3. Edit `oops` PR body: wrap the line as `~~build-group=https://github.com/JCSDA-internal/ufo/pull/<n>~~` (or delete it).
+3. Edit `oops` PR body: delete the `build-group=https://github.com/JCSDA-internal/ufo/pull/<n>` line.
 4. Empty-commit push to retrigger CI on the `oops` PR (annotations are read at CI-launch time).
 5. Once green, merge `oops`.
 

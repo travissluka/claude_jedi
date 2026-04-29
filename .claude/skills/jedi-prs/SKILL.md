@@ -2,11 +2,11 @@
 name: jedi-prs
 description: >-
   Coordinate multi-repo PRs across JCSDA-internal repos. Handles change analysis,
-  merge-order reasoning, build-group selection, body drafting, opening, label
-  lifecycle (bug / waiting for another PR / coordinate merge / ready for merge),
-  and the multi-day follow-up flow (draft→ready, drop stale build-groups). State
-  is persisted in a memory file so a workflow that spans a CI cycle (hours) can
-  be resumed across conversations.
+  merge-order reasoning, build-group selection, tracking-issue check/creation,
+  body drafting, opening, label lifecycle (bug / waiting for another PR /
+  coordinate merge / ready for merge), and the multi-day follow-up flow
+  (draft→ready, drop stale build-groups). State is persisted in a memory file
+  so a workflow that spans a CI cycle (hours) can be resumed across conversations.
   Use when: the user is preparing PRs for a feature that touches multiple bundle
   repos, or wants to resume / inspect / mutate an in-flight coordinated PR set.
 argument-hint: "[<slug> [<repo:branch> ...] | <slug> [--show|--ready <repo>|--drop <repo> <url>|--label <repo> <add|rm> <label>] | --list]"
@@ -72,6 +72,12 @@ slug: <slug>
 phase: NEW  # NEW | DRAFTED | OPEN | CLOSED
 created: YYYY-MM-DD
 last_updated: YYYY-MM-DD
+issue:                  # tracking issue (one per PR set); null only if user explicitly opted out
+  repo: oops            # where the issue lives — preferred: the most-upstream repo in the set (lowest merge_order)
+  number: 1234
+  url: https://github.com/JCSDA-internal/oops/issues/1234
+  state: open           # open | closed
+  closing_repo: fv3-jedi  # repo of the LAST-merging PR — its body carries `Closes ...`; all other PRs use `Refs ...`
 repos:
   - repo: oops
     branch: feature/x
@@ -133,12 +139,37 @@ The frontmatter is authoritative. The body is human-readable journal + drafted P
      - `waiting for another PR` for any repo whose `build_groups` is non-empty (i.e., depends on a sibling in this set).
      - `waiting for other repos` only if the user has flagged a model-side dependency outside this PR set; otherwise omit.
      - `coordinate merge` / `ready for merge` are NOT opening labels — they apply later, after review.
-6. Show the user, in one combined message:
-   - Per-repo: drafted title + body (with `<TBD-...>` placeholders still present)
+6. **Tracking issue.** Every PR set should reference at least one open GitHub issue (zenhub uses these for tracking and story-point assignment). See ## Tracking issue for the full lifecycle.
+   a. Search for candidate issues across the affected repos:
+      ```bash
+      for r in <repo1> <repo2> ...; do
+        gh issue list -R "JCSDA-internal/$r" --state open --limit 50 \
+          --search "<slug-keyword> OR <feature-keyword>" \
+          --json number,title,assignees,url --jq '.[] | "\(.url) — \(.title) [@\(.assignees[].login // "unassigned")]"'
+      done
+      ```
+      Use 1–3 keywords from the slug/feature for `--search`. If no hits, also propose a broader fallback search (e.g., search by changed-file area).
+   b. Surface candidates to user. Ask which (if any) covers this work.
+   c. If none / no fit: propose creating one in the **most-upstream repo** in the set (the repo with the lowest `merge_order`; ties → user picks). Draft a short title (≤60 chars) and a 2–3 sentence body. Default assignee is `travissluka`.
+   d. Determine `closing_repo`: the repo whose PR is **last to merge** (highest `merge_order`; ties → user picks). Its body will carry the `Closes ...` line; all others use `Refs ...`.
+7. Show the user, in one combined message:
+   - Per-repo: drafted title + body (with `<TBD-...>` and `<ISSUE-REF>` placeholders still present)
    - Cross-repo plan: merge order table; build-group topology; draft-vs-ready
    - Reviewer candidates (with commit counts) — note: NOT assigned, just suggestions
    - Label proposal per repo (opening labels only)
-7. On approval, **write the state file** with `phase: DRAFTED`; insert drafted bodies under `## Drafted bodies`; append an `## Active Projects` line to `MEMORY.md`.
+   - Tracking issue: existing #N OR proposed `gh issue create` invocation (with title + body + assignee), and the `closing_repo` choice
+8. On approval:
+   a. If a new issue was proposed: open it, capture the number, **then remind the user to set story points in the zenhub UI** (the skill cannot set them — no zenhub CLI installed).
+      ```bash
+      gh issue create -R JCSDA-internal/<upstream> \
+        --title "<short title>" \
+        --body-file /tmp/jedi-prs-<slug>-issue.md \
+        --assignee travissluka
+      ```
+   b. Substitute `<ISSUE-REF>` placeholders in each drafted body:
+      - `closing_repo`'s body: `Closes JCSDA-internal/<issue.repo>#<issue.number>` (or bare `Closes #<n>` if `closing_repo == issue.repo`)
+      - All other repos: `Refs JCSDA-internal/<issue.repo>#<issue.number>`
+   c. **Write the state file** with `phase: DRAFTED`; populate `issue:` block; insert resolved drafted bodies under `## Drafted bodies`; append an `## Active Projects` line to `MEMORY.md`.
 
 #### Per-repo agent prompt template
 
@@ -169,7 +200,7 @@ Report (under 400 words, structured):
    - "Passes alone against current develop of others" — if this PR's CI would go green without any build-group annotations.
    - OR "Requires build-group from <repo>" — if the PR's bundle build depends on a sibling repo's matching change being available. Be specific about why (e.g., "saber tests call Diffusion::setParameters(VerticalMethod::Implicit, ...) which doesn't exist on oops develop").
 
-5. **Drafted PR title and body** following the template at claude/pr-conventions.md (## Description / Issue(s) addressed / Dependencies / Impact / Manual Testing Instructions / Checklist). For sibling-PR references in the Dependencies section, use placeholders like `<TBD-oops-PR>` — the orchestrator will resolve them. Do not invent URLs.
+5. **Drafted PR title and body** following the template at claude/pr-conventions.md (## Description / Issue(s) addressed / Dependencies / Impact / Manual Testing Instructions / Checklist). For sibling-PR references in the Dependencies section, use placeholders like `<TBD-oops-PR>` — the orchestrator will resolve them. For the `## Issue(s) addressed` section, write the literal placeholder `<ISSUE-REF>` on its own line — the orchestrator will substitute either `Closes JCSDA-internal/<repo>#<n>` (last-to-merge PR) or `Refs JCSDA-internal/<repo>#<n>` (all others). Do not invent issue numbers or URLs.
 
 6. **Reviewer candidates**: top 5 distinct authors from `git log --format='%an'` on the changed paths, with commit counts, ranked by recency-weighted activity. Note: this is a suggestion list — do NOT include the PR author themselves. Do NOT default to claude/maintainers.md (that is the admin/escalation list, not a review pool).
 
@@ -321,7 +352,61 @@ For each, read frontmatter `slug`, `feature`, `phase`, `last_updated`. Emit a sm
 - Every body edit before `gh api -X PATCH`.
 - Every `--ready` before `gh pr ready`.
 - Every label add/remove before `gh pr edit --add-label`/`--remove-label` (lifecycle proposals during resume, cascades during `--drop`/`--ready`, and `--label` invocations).
+- Every issue creation (`gh issue create`) and the `closing_repo` choice.
 - Branch pushes (no `git push` without explicit permission, per memory).
+
+## Tracking issue
+
+Every PR set should reference at least one open GitHub issue so zenhub can track it (story points, sprint planning). The skill enforces this gate at NEW; the user can opt out per set, but the default is to require an issue.
+
+### Placement
+
+- **Existing issue:** any open issue the user picks. Skill records `{repo, number, url, state}` plus `closing_repo`.
+- **New issue:** opened in the **most-upstream repo** in the set (the one with the lowest `merge_order`). Rationale: keeps the canonical tracker near the upstream change; downstream PRs reference cross-repo via the standard `JCSDA-internal/<repo>#<n>` form (which respects `feedback_cross_repo_pr_refs.md`).
+
+### Closing PR
+
+The `closing_repo` is the repo whose PR is **last to merge** (highest `merge_order`). That PR's body carries `Closes ...` (which auto-closes the issue when it merges); all other PRs use `Refs ...`.
+
+- Same-repo close: `Closes #<n>` (when `closing_repo == issue.repo`).
+- Cross-repo close: `Closes JCSDA-internal/<issue.repo>#<n>`. GitHub honors cross-repo close keywords within the same org when the actor has triage perms — works for JCSDA-internal.
+- All non-closing PRs: `Refs JCSDA-internal/<issue.repo>#<n>` — links the PR to the issue without closing it.
+
+If `merge_order` ties pick more than one candidate for `closing_repo`, ask the user.
+
+### Issue body template
+
+Short and stub-like — the user fills in detail later, and the linked PRs carry the substantive write-up. Two or three sentences max.
+
+```
+<one-paragraph summary of the goal>
+
+Tracked across:
+- JCSDA-internal/<repo1> (PR forthcoming)
+- JCSDA-internal/<repo2> (PR forthcoming)
+
+Story points: TBD (set in zenhub).
+```
+
+### Story points
+
+The skill **cannot** set zenhub story points (no zenhub CLI installed; would need a zenhub PAT and a custom GraphQL call). After `gh issue create` succeeds, the skill prints:
+
+> ⚠️ Set story points in zenhub: <issue.url>
+
+…and prompts the user to confirm before proceeding. Don't gate on user confirmation that points are set — just remind.
+
+### Opting out
+
+If the user explicitly declines an issue (one-line typo fix, doc cherry-pick, etc.):
+
+- Set `issue: null` in state.
+- All PR bodies render `## Issue(s) addressed` as `n/a`.
+- Decision log records the opt-out with a one-line rationale.
+
+### Resume reconciliation
+
+On bare-resume, `gh issue view <n> -R JCSDA-internal/<issue.repo> --json state,closedAt --jq '{state, closedAt}'` runs alongside the PR queries. If `state == CLOSED` but no `closing_repo` PR has merged: surface as **destructive drift** (the issue was closed externally — likely intentional, but worth confirming the closing PR doesn't still need to merge with `Closes`).
 
 ## Labels
 

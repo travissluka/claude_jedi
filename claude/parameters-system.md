@@ -155,6 +155,15 @@ Available: `minItemsConstraint(n)`, `maxItemsConstraint(n)`, `nonEmptyConstraint
 
 `validateAndDeserialize()` first generates a JSON schema from all registered parameters and validates against it, then deserializes. Provides detailed error paths on failure.
 
+Schema validation is **off by default** — gated by the `VALIDATE_PARAMETERS` environment variable, read once at startup in `LibOOPS::initialise()` (`oops/util/LibOOPS.cc:121`) and consulted in `Parameters::validate()` (`oops/util/parameters/Parameters.cc:151`). When unset, `validate()` is a no-op and only the deserialize step runs.
+
+CI behavior differs by site:
+
+- **UKMO CI** runs all tests with `VALIDATE_PARAMETERS=1`.
+- **JCSDA CI** does **not** set it globally; only the dedicated `oops_util_parameters` test enables it via `ENVIRONMENT VALIDATE_PARAMETERS=1` in `oops/src/CMakeLists.txt`.
+
+This asymmetry is the usual root cause of "tests pass on JCSDA, fail on UKMO" with parameter-related errors (unknown key, missing required, wrong type). Reproduce locally by exporting `VALIDATE_PARAMETERS=1` before running ctest. The user's `~/work/env.sh` exports it, so any shell with the JEDI env sourced is in UKMO-equivalent validation mode.
+
 ## Supported Types
 
 Scalars: `int`, `float`, `double`, `bool`, `std::string`

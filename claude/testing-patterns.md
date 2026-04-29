@@ -181,6 +181,24 @@ SABER registers tests directly via `saber_add_test(...)` calls (wrapper around `
 
 Tier is expressed via `LABELS tier2` on individual test entries (MPI+OpenMP expansions, tutorial tests, etc.) — same convention as the other repos. Each test is still generated for multiple MPI/OMP combinations (1/1, 2/1, 4/1, 1/2); the 1/2 OMP-2 variants get `LABELS tier2`.
 
+## Runtime environment variables affecting tests
+
+A handful of env vars change test behavior at runtime. They are not test selectors — they modify what a running test does — so failures depend on the shell the tester used.
+
+| Variable | Effect | Default | Where set |
+|----------|--------|---------|-----------|
+| `VALIDATE_PARAMETERS` | Enables JSON-schema validation of all `oops::Parameters` deserializations. Surfaces unknown keys, missing required keys, and type mismatches that are otherwise silently tolerated. | unset (off) | UKMO CI sets it globally; JCSDA CI does **not**. Only the dedicated `oops_util_parameters` ctest sets it via `ENVIRONMENT VALIDATE_PARAMETERS=1` in `oops/src/CMakeLists.txt`. |
+| `OOPS_DEBUG` / `OOPS_TRACE` | Toggle verbose/trace logging in `LibOOPS`. | unset | Per-test or per-shell. |
+
+**`VALIDATE_PARAMETERS` is the usual culprit when a test is green on JCSDA CI but red on UKMO CI** with a parameter-related error message. Reproduce locally:
+
+```bash
+export VALIDATE_PARAMETERS=1
+ctest -R <pattern> --output-on-failure
+```
+
+Mechanism and source pointers: see `parameters-system.md` § JSON schema validation.
+
 ## Adjoint Tests (Dot-Product Test)
 
 The standard TL/AD verification pattern:

@@ -9,7 +9,7 @@ description: >-
   so a workflow that spans a CI cycle (hours) can be resumed across conversations.
   Use when: the user is preparing PRs for a feature that touches multiple bundle
   repos, or wants to resume / inspect / mutate an in-flight coordinated PR set.
-argument-hint: "[<slug> [<repo:branch> ...] | <slug> [--show|--ready <repo>|--drop <repo> <url>|--label <repo> <add|rm> <label>] | --list]"
+argument-hint: "[<slug> [<repo:branch> ...] | <slug> [--show|status|--ready <repo>|--drop <repo> <url>|--label <repo> <add|rm> <label>|--close] | --list]"
 allowed-tools:
   - Bash
   - Read
@@ -33,13 +33,14 @@ Codifies `claude/pr-conventions.md` end-to-end and persists per-feature state fo
 | Form | Action |
 |---|---|
 | (no args) | **Status** — read-only across all active state files |
-| `<slug> --show` | **Status** — read-only for one slug |
+| `<slug> --show` (or `<slug> status`) | **Status** — read-only for one slug |
 | `<slug> <repo:branch> ...` (≥1 repo) | **NEW** — analyze, draft, save state |
 | `<slug> --import <repo>:<pr#> ...` (≥1 PR) | **Import** — track already-open PRs (skip NEW/DRAFTED → straight to OPEN) |
 | `<slug>` (state file exists) | **Resume** — Status + write back drift + propose next steps |
 | `<slug> --ready <repo>` | Draft → ready (also adds review-stage label) |
 | `<slug> --drop <repo> <full-pr-url>` | Remove stale `build-group=` line (+ label cascade) |
 | `<slug> --label <repo> <add\|rm> <label>` | Manual single-label nudge |
+| `<slug> --close` | Transition phase → CLOSED + clean up state file + MEMORY.md (single combined approval) |
 | `--list` | List all `project_*_prs.md` state files (filenames + frontmatter, no live `gh` calls) |
 
 ### Slug resolution
@@ -233,11 +234,11 @@ For tracking PRs that were already opened outside this skill (e.g. you ran `gh p
 7. Append `## Active Projects` line in `MEMORY.md` (approval-gated).
 8. Decision-log entry: `<date> — Imported existing PRs <list>; bypassed NEW/DRAFTED phases.`
 
-### Status — `(no args)` or `<slug> --show`
+### Status — `(no args)` or `<slug> --show` (alias: `<slug> status`)
 
 Read-only. No writes, no `## Reconciliation log` appends, no migrations. Pure dashboard.
 
-**Scope:** no args → all `OPEN`/`DRAFTED` state files (skip `CLOSED`). `--show <slug>` → just that slug.
+**Scope:** no args → all `OPEN`/`DRAFTED` state files (skip `CLOSED`). `--show <slug>` (or `<slug> status`) → just that slug.
 
 1. Read each state file in scope.
 2. Reconcile against live `gh`. One combined Bash block across all PRs in scope:
@@ -310,14 +311,15 @@ Empty case (bare, no active state files): `No active PR sets. Use \`/jedi-prs <s
 
 Run the **Status** logic above (steps 1–4) for this slug, then mutate:
 
-1. **Write back non-destructive drift**: CI changed, body edited externally, fast-forward commits → update frontmatter; append dated `## Reconciliation log` line.
-2. **Stop on destructive drift**: PR closed/deleted, force-push not descendant of `last_sha`, unexpected PR for `pr: null` branch, tracking issue closed before `closing_repo` PR has merged. Show what changed; wait for direction before mutating.
+1. **Write back non-destructive drift — auto-apply, no prompt.** CI changed (incl. `pr_state` open→merged, ci_state pending→green), body edited externally, fast-forward commits → update frontmatter and append a dated `## Reconciliation log` line. Surface what was written in the dashboard; do not gate on approval. (Approval gates exist for *outgoing* GitHub mutations, not for syncing local state to observed reality.)
+2. **Stop on destructive drift**: PR closed/deleted (without merge), force-push not descendant of `last_sha`, unexpected PR for `pr: null` branch, tracking issue closed before `closing_repo` PR has merged. Show what changed; wait for direction before mutating.
 3. **Legacy-state migration** — if state file lacks `issue:` field, OR any `repos[i]` lacks `labels:`:
    - `issue:`: search candidate tracking issues across affected repos (same `gh issue list` query as **NEW** step 6a); three outcomes (reuse / opt out / opt out with note). Write `issue:` block (or `null`).
    - `labels:`: capture from the `gh pr view ... labels` already fetched in step 2; write back into each `repos[i].labels`.
    One-shot — never re-prompt for the same file.
 4. **Label-drift reconciliation**: live ⊃ state → silently adopt; live ⊂ state → log to `## Reconciliation log` and re-propose if lifecycle calls for it.
 5. **Propose next steps** (each item is its own approval gate):
+   - "All `pr_state == merged` → run `/jedi-prs <slug> --close` to wrap up?" (highest priority — overrides the bullets below when it applies)
    - "All level-N CI green → open level-(N+1)?"
    - "Upstream PR `<repo>#<n>` merged → drop downstream `build-group=` lines?"
    - "Draft `<repo>#<n>` is open — `/jedi-prs <slug> --ready <repo>` to convert + trigger CI."
@@ -375,18 +377,29 @@ ls "$CLAUDE_CONFIG_DIR/projects/$(pwd | tr / -)/memory"/project_*_prs.md 2>/dev/
 
 For each, read frontmatter `slug`, `feature`, `phase`, `last_updated`. Emit a small table. Filename + frontmatter only — no live `gh` calls. Use the bare-invocation Dashboard for live status.
 
-### CLOSED — wrap up
+### `--close` — transition to CLOSED + clean up
 
-User explicitly transitions to `phase: CLOSED`:
+Idempotent wrap-up. Run when all PRs are merged (or the user is abandoning the set). **Single combined approval gate** — do not split into per-action prompts.
 
-1. Confirm all `pr_state: merged` (or `closed` for any abandoned).
-2. **Prefer updating an existing summary memory** over creating a new one:
+1. **Reconcile fresh** (same `gh pr view` query as Status step 2). Verify each `repos[i].pr_state` is `merged` or `closed`. If any PR is still `open`, refuse: print which PRs are still open and stop.
+2. **Auto-apply any pending drift** (per Resume step 1) so the state file reflects merge timestamps before deletion.
+3. **Look for an existing summary memory** to update vs. creating a new one:
    ```bash
    ls "$STATE_DIR"/project_<slug>_*.md "$STATE_DIR"/project_<slug-with-underscores>_*.md 2>/dev/null \
      | grep -v _prs.md
    ```
-   Both hyphen and underscore variants (this skill uses hyphens; hand-written memories may use underscores). If one exists (`_summary.md`, `_branches.md`, `_reference.md`, etc.), update it with merged dates. Else create `project_<slug>_summary.md`.
-3. Prompt user to delete the state file and the `## Active Projects` index entry. Both destructive — wait for explicit approval before `rm` and MEMORY.md edit.
+   Both hyphen and underscore variants (this skill uses hyphens; hand-written memories may use underscores).
+4. **Decide cleanup plan** — pick the first matching case:
+   - **Existing summary memory found** → propose updating it with merged-PR dates + new merged-into-develop summary line.
+   - **Degenerate single-repo case** — exactly one repo, `issue: null`, opening labels just `bug` or empty, no existing summary → **skip the summary entirely**. PR body + git log are sufficient context; a one-line memory adds noise.
+   - **Otherwise** (multi-repo set, or single repo with tracking issue, or anything non-trivial) → propose creating `project_<slug>_summary.md` with: feature description, list of merged PRs with dates, what the issue tracked, any follow-ups left.
+5. **Show one combined plan** to the user covering all of:
+   - phase flip to `CLOSED` (in-memory only, since the state file is about to be deleted)
+   - summary memory action: "update `<existing-file>`" / "create `project_<slug>_summary.md`" / "skip — degenerate case"
+   - `rm <state-file>`
+   - remove the `## Active Projects` line from `MEMORY.md`
+   Render as a 4-line preview (or 3-line if summary skipped). **One yes/no.**
+6. On approval, apply all changes in the order shown. Print one-line confirmation.
 
 ## Reference: managed labels
 

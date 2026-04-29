@@ -48,7 +48,11 @@ The `<slug>` arg may match either:
 1. The literal `slug:` field of a state file's frontmatter (preferred).
 2. The `feature:` field, if no slug matches.
 
-Resolution algorithm: glob `project_*_prs.md`, read each frontmatter, build a `{slug, feature} → file` map. If exactly one match, use it (and print a one-line note if it was matched via feature, e.g. `(resolved feature 'implicit-vertical-diffusion' → slug 'implicit-vertical')`). If multiple match, list them and ask. If none, error out.
+Resolution algorithm: glob `project_*_prs.md`, read each frontmatter, build a `{slug, feature} → file` map.
+
+1. **Exact match** on `slug` or `feature` → use it (print a one-line note if matched via feature, e.g. `(resolved feature 'implicit-vertical-diffusion' → slug 'implicit-vertical')`).
+2. **Fuzzy fallback** if no exact match: prefix-match either direction (`slug.startswith(input) or input.startswith(slug)`), case-insensitive. If exactly one candidate, propose it explicitly (e.g. `no exact match for 'sequential-enk' — closest is 'sequential-enkf'. Use that?`) and wait for user confirmation. If multiple, list them and ask. **Never silently substitute** — typo correction always needs an explicit "yes".
+3. **No match** → error out with usage and the output of `--list`.
 
 ## Paths
 
@@ -111,6 +115,8 @@ repos:
 ```
 
 The frontmatter is authoritative. The body is human-readable journal + drafted PR bodies for the DRAFTED→OPEN transition.
+
+**Legacy / imported state files.** State files predating later schema additions may be missing the top-level `issue:` block, the per-repo `labels:` field, or the `## Drafted bodies` section (e.g., when imported from PRs that were already open on GitHub). Treat any missing optional field as null/empty rather than as drift; do not flag it for reconciliation. The Resume workflow's label-drift step will silently adopt live labels into a previously-empty `labels:`. The `## Drafted bodies` section may legitimately be a placeholder ("PRs already open on GitHub; live bodies are the source of truth.") for imported sets — don't treat that as missing data.
 
 ### Phase semantics
 
@@ -260,7 +266,12 @@ User can interrupt between merge-order groups and resume later.
    - **Match** → proceed.
    - **Non-destructive drift** (CI status changed, body edited externally, new commits past the same fast-forward line): update frontmatter; append a dated line to `## Reconciliation log`. (Skipped if `--show`.)
    - **Destructive drift** (PR closed/deleted, branch force-pushed onto a commit that is NOT a descendant of `last_sha`, `gh pr list` returned an unexpected PR for a `pr: null` branch, or tracking issue closed before the `closing_repo` PR has merged): **stop**, show what changed, ask user before mutating state.
-5. Print a one-line **tracking issue** header (`Tracking issue: <issue.url> (<state>)`, or `Tracking issue: (none — opted out)`), then a status table using emoji for `pr_state`, `ci`, and `draft`:
+5. Print a one-line **tracking issue** header — three cases:
+   - Issue tracked: `Tracking issue: <issue.url> (<state>)`
+   - User opted out: `Tracking issue: (none — opted out)`
+   - State file predates the issue field: `Tracking issue: (none — legacy state file)`
+
+   Then a status table using emoji for `pr_state`, `ci`, and `draft`:
 
    | Glyph | `pr_state` | `ci_state` | `is_draft` |
    |---|---|---|---|
@@ -357,8 +368,13 @@ For each, read frontmatter `slug`, `feature`, `phase`, `last_updated`. Emit a sm
 When all PRs are merged, the user explicitly transitions to `phase: CLOSED`:
 
 1. Confirm all `pr_state: merged` (or `closed` for any abandoned).
-2. Write a stable project memory under `<memory-dir>/project_<slug>_summary.md` capturing what shipped (PRs, merge dates, key API additions). This is a normal `type: project` memory, not a state file.
-3. Prompt user to delete the `project_<slug>_prs.md` state file and the `## Active Projects` index entry.
+2. Stable summary memory — **prefer updating an existing one over creating a new one**:
+   ```bash
+   ls "$STATE_DIR"/project_<slug>_*.md "$STATE_DIR"/project_<slug-with-underscores>_*.md 2>/dev/null \
+     | grep -v _prs.md
+   ```
+   Search both hyphen and underscore variants of the slug (slugs in this skill are hyphenated by convention — `sequential-enkf` — but earlier hand-written memories may use underscores — `project_sequential_enkf_branches.md`). If a summary-style memory already exists (`_summary.md`, `_branches.md`, `_reference.md`, etc.), update it with merged dates, working-branch resets, and any final PR info. Only create `project_<slug>_summary.md` if no existing summary covers the feature.
+3. Prompt user to delete the `project_<slug>_prs.md` state file and the `## Active Projects` index entry. Both are destructive — **wait for explicit user approval** before `rm` and before the MEMORY.md edit.
 
 The skill never auto-closes.
 

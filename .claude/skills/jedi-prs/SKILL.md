@@ -2,13 +2,14 @@
 name: jedi-prs
 description: >-
   Coordinate multi-repo PRs across JCSDA-internal repos. Handles change analysis,
-  merge-order reasoning, build-group selection, body drafting, opening, and the
-  multi-day follow-up flow (draft→ready, drop stale build-groups). State
+  merge-order reasoning, build-group selection, body drafting, opening, label
+  lifecycle (bug / waiting for another PR / coordinate merge / ready for merge),
+  and the multi-day follow-up flow (draft→ready, drop stale build-groups). State
   is persisted in a memory file so a workflow that spans a CI cycle (hours) can
   be resumed across conversations.
   Use when: the user is preparing PRs for a feature that touches multiple bundle
   repos, or wants to resume / inspect / mutate an in-flight coordinated PR set.
-argument-hint: "[<slug> [<repo:branch> ...] | <slug> [--show|--ready <repo>|--drop <repo> <url>] | --list]"
+argument-hint: "[<slug> [<repo:branch> ...] | <slug> [--show|--ready <repo>|--drop <repo> <url>|--label <repo> <add|rm> <label>] | --list]"
 allowed-tools:
   - Bash
   - Read
@@ -34,8 +35,9 @@ Codifies the rules in `claude/pr-conventions.md` end-to-end so they are applied 
 | `<slug> <repo:branch> ...` (≥1 repo) | **NEW** phase: analyze branches, draft bodies, save state |
 | `<slug>` (state file exists) | **Resume**: reconcile and propose next steps |
 | `<slug> --show` | Read-only: reconcile + status table, then stop |
-| `<slug> --ready <repo>` | Convert that repo's PR from draft → ready |
-| `<slug> --drop <repo> <full-pr-url>` | Remove a stale `build-group=` line |
+| `<slug> --ready <repo>` | Convert that repo's PR from draft → ready (also reconciles labels) |
+| `<slug> --drop <repo> <full-pr-url>` | Remove a stale `build-group=` line (also reconciles labels) |
+| `<slug> --label <repo> <add\|rm> <label>` | Add or remove a single label on that repo's PR (escape hatch for manual nudges) |
 | `--list` | List all `project_*_prs.md` state files with phase |
 
 If `<slug>` has no state file and no `<repo:branch>` args were provided, error out with usage.
@@ -80,6 +82,7 @@ repos:
     merge_order: 1        # ties allowed (same int = parallel)
     is_draft: false
     build_groups: []      # list of canonical https://github.com/JCSDA-internal/<repo>/pull/<n>
+    labels: []            # current GH labels — managed by skill (bug, waiting for another PR, coordinate merge, ready for merge, ...)
 ---
 
 # In-flight: <feature>
@@ -107,7 +110,7 @@ The frontmatter is authoritative. The body is human-readable journal + drafted P
 
 - `NEW` — analysis runs, bodies drafted; transitions to `DRAFTED` on user approval. (NEW is transient; the state file is written with `phase: DRAFTED` once the user approves.)
 - `DRAFTED` — bodies approved, no/some PRs opened. Transitions to `OPEN` when all `pr` fields populated.
-- `OPEN` — all PRs opened. `--show`, `--ready`, `--strikethrough` operate.
+- `OPEN` — all PRs opened. `--show`, `--ready`, `--drop`, `--label`, and bare-resume label reconciliation operate.
 - `CLOSED` — manual transition. Skill writes a stable summary memory and prompts user to remove the inflight file + index entry.
 
 ## Workflow
@@ -125,12 +128,16 @@ The frontmatter is authoritative. The body is human-readable journal + drafted P
    - Decide `is_draft`: only true if circular cross-repo deps require it.
    - Resolve `<TBD-<repo>-PR>` placeholders into a coherent plan (we don't have URLs yet, but we know the topology).
    - Dedupe reviewer candidates across repos; surface as a combined ranked list.
-   - Propose label only if `bug` clearly applies.
+   - Propose **opening labels** per repo (see ## Labels for full lifecycle):
+     - `bug` if the change clearly fixes incorrect behavior in merged code.
+     - `waiting for another PR` for any repo whose `build_groups` is non-empty (i.e., depends on a sibling in this set).
+     - `waiting for other repos` only if the user has flagged a model-side dependency outside this PR set; otherwise omit.
+     - `coordinate merge` / `ready for merge` are NOT opening labels — they apply later, after review.
 6. Show the user, in one combined message:
    - Per-repo: drafted title + body (with `<TBD-...>` placeholders still present)
    - Cross-repo plan: merge order table; build-group topology; draft-vs-ready
    - Reviewer candidates (with commit counts) — note: NOT assigned, just suggestions
-   - Label proposal
+   - Label proposal per repo (opening labels only)
 7. On approval, **write the state file** with `phase: DRAFTED`; insert drafted bodies under `## Drafted bodies`; append an `## Active Projects` line to `MEMORY.md`.
 
 #### Per-repo agent prompt template
@@ -178,16 +185,18 @@ Do not run gh commands or interact with GitHub. Branches may not be pushed yet. 
 4. For each PR:
    - Read drafted body from `## Drafted bodies` → `### <repo>` section.
    - Substitute resolved URLs into `<TBD-X-PR>` placeholders using PR numbers from earlier opened batches. (URL form: `https://github.com/JCSDA-internal/<repo>/pull/<n>`.)
-   - Show **final** body to user. On approval:
+   - Show **final** body + opening labels to user. On approval:
      ```bash
      gh pr create -R JCSDA-internal/<repo> \
        --title "<title>" \
        --body-file /tmp/jedi-prs-<slug>-<repo>-body.md \
        --assignee travissluka \
+       [--label "bug"] [--label "waiting for another PR"] \
        [--draft]
      ```
+     Repeat `--label "<name>"` per opening label. Quote multi-word names. See ## Labels.
    - Capture PR number from the output URL.
-5. Update state: set `pr`, `pr_state: open`, `is_draft`, `last_sha`. Update `last_updated`.
+5. Update state: set `pr`, `pr_state: open`, `is_draft`, `last_sha`, `labels` (the labels actually passed to `gh pr create`). Update `last_updated`.
 6. After all PRs in all groups open, set `phase: OPEN`.
 
 User can interrupt between merge-order groups and resume later.
@@ -201,8 +210,9 @@ User can interrupt between merge-order groups and resume later.
      r=${entry%:*}; n=${entry#*:}
      printf '==%s#%s==\n' "$r" "$n"
      gh pr view "$n" -R "JCSDA-internal/$r" \
-       --json state,mergedAt,headRefOid,isDraft,statusCheckRollup \
-       --jq '{state, isDraft, headRefOid: .headRefOid[0:8], mergedAt,
+       --json state,mergedAt,headRefOid,isDraft,statusCheckRollup,reviewDecision,labels \
+       --jq '{state, isDraft, headRefOid: .headRefOid[0:8], mergedAt, reviewDecision,
+              labels: [.labels[].name],
               ci_states: [.statusCheckRollup[] | .conclusion // .state]
                          | group_by(.) | map({(.[0]): length}) | add}'
    done
@@ -230,25 +240,37 @@ User can interrupt between merge-order groups and resume later.
    Example row format (markdown table; one row per repo):
 
    ```
-   | repo      | branch                              | PR    | state | ci | sha       | order | draft | build_groups |
-   |-----------|-------------------------------------|-------|-------|----|-----------|-------|-------|--------------|
-   | oops      | feature/implicit-vertical-diffusion | #3275 | 🟢    | 🟢 | 01d90719  | 1     |       | (none)       |
-   | jedi-docs | feature/implicit-vertical-diffusion | #1028 | 🟢    | 🟢 | 77104ced  | 1     |       | (none)       |
-   | saber     | feature/implicit-vertical-diffusion | #1234 | 🟢    | 🔴 | aa320319  | 2     |       | oops#3275    |
+   | repo      | branch                              | PR    | state | ci | sha       | order | draft | build_groups | labels                          |
+   |-----------|-------------------------------------|-------|-------|----|-----------|-------|-------|--------------|---------------------------------|
+   | oops      | feature/implicit-vertical-diffusion | #3275 | 🟢    | 🟢 | 01d90719  | 1     |       | (none)       | ready for merge                 |
+   | jedi-docs | feature/implicit-vertical-diffusion | #1028 | 🟢    | 🟢 | 77104ced  | 1     |       | (none)       | coordinate merge                |
+   | saber     | feature/implicit-vertical-diffusion | #1234 | 🟢    | 🔴 | aa320319  | 2     |       | oops#3275    | bug, waiting for another PR     |
    ```
 
-   Sort rows by `merge_order` ascending (then by repo name within a level). Render `build_groups` as `repo#PR` shorthand for compactness; full URLs only in state.
-6. If `--show`: **stop here. Do not write to the state file.** Otherwise propose actionable next steps:
+   Sort rows by `merge_order` ascending (then by repo name within a level). Render `build_groups` as `repo#PR` shorthand for compactness; full URLs only in state. Labels: comma-separated, lowercase as-stored on GitHub; show `(none)` if empty.
+6. **Label-drift reconciliation.** Compare each repo's live `labels` to state `labels`:
+   - Live ⊃ state: someone added a label outside the skill — adopt it into state silently (no decision-log entry needed for human-curated labels like `INFRA`, `OBS`, partner-org tags).
+   - Live ⊂ state: a managed label was removed externally — log to `## Reconciliation log` and re-propose if the lifecycle (## Labels) still calls for it.
+   - Then evaluate each managed label against the lifecycle (## Labels) and stage transitions to propose in step 7.
+7. If `--show`: **stop here. Do not write to the state file.** Otherwise propose actionable next steps. Label transitions are explicit user-approval items, not silent updates:
    - "All level-N CI green → ready to open level-(N+1)?"
-   - "Upstream PR `<repo>#<n>` merged → drop downstream `build-group=` lines that point at it?"
+   - "Upstream PR `<repo>#<n>` merged → drop downstream `build-group=` lines that point at it (and `waiting for another PR` if last dep)?"
    - "Draft `<repo>#<n>` CI is green → convert to ready?"
+   - "Reviewers approved `<repo>#<n>` → add `coordinate merge` (siblings still in flight) / `ready for merge` (this is the last in the order)?"
    - "Failing CI on `<repo>#<n>` → investigate before next step."
 
 ### `--ready <repo>`
 
-1. Confirm with user.
-2. `gh pr ready <n> -R JCSDA-internal/<repo>`
-3. Update state: `is_draft: false`. Append decision log line.
+1. Confirm with user. Also propose, in the same prompt, the appropriate review-stage label per ## Labels:
+   - `coordinate merge` if any sibling PR in the set has `pr_state` ∈ {open, null} (still in flight).
+   - `ready for merge` if all siblings are `merged` (or this is a single-repo set).
+   Both are draft-incompatible — the label transition is paired with the draft→ready flip.
+2. Run in a single Bash block so failure of one stops the rest:
+   ```bash
+   gh pr ready <n> -R JCSDA-internal/<repo> && \
+   gh pr edit <n> -R JCSDA-internal/<repo> --add-label "<chosen-label>"
+   ```
+3. Update state: `is_draft: false`; add the chosen label to `repos[i].labels`. Append decision log line.
 
 ### `--drop <repo> <full-pr-url>`
 
@@ -264,6 +286,26 @@ User can interrupt between merge-order groups and resume later.
    (`gh pr edit --body-file` fails on JCSDA-internal repos due to a classic-projects GraphQL deprecation; the REST PATCH path works.)
 6. Suggest: "Push an empty commit to retrigger CI: `git -C bundle/<repo> commit --allow-empty -m 'trigger CI' && git -C bundle/<repo> push`."
 7. Update state `repos[i].build_groups` (drop the URL). Append decision log line.
+8. **Label cascade.** If `repos[i].build_groups` is now empty AND `waiting for another PR` is in `repos[i].labels`:
+   - Propose dropping the label. On approval:
+     ```bash
+     gh pr edit <state-pr> -R JCSDA-internal/<repo> --remove-label "waiting for another PR"
+     ```
+   - If the PR is already past review (e.g., `reviewDecision == APPROVED`), also propose adding `coordinate merge` (still has live siblings) or `ready for merge` (all siblings already merged) per ## Labels. Same `gh pr edit ... --add-label` call.
+   - Update `repos[i].labels` to match.
+
+### `--label <repo> <add|rm> <label>`
+
+Escape hatch for manual label nudges (e.g., adding `do not merge` after a regression report, or applying a partner-org tag like `OBS`).
+
+1. Validate `<label>` is one of the org-wide labels in the table at ## Labels (managed lifecycle labels) or is a known unmanaged label (group tags `INFRA`/`OBS`/etc., partner orgs, `do not merge`, `enhancement`, etc.). If unknown, list candidates and ask.
+2. Confirm with user.
+3. Apply:
+   ```bash
+   gh pr edit <state-pr> -R JCSDA-internal/<repo> --add-label "<label>"     # for add
+   gh pr edit <state-pr> -R JCSDA-internal/<repo> --remove-label "<label>"  # for rm
+   ```
+4. Update `repos[i].labels`. Append decision log line. **Do not** auto-cascade other lifecycle labels — user explicitly invoked a single change. Lifecycle reconciliation happens on the next bare-resume.
 
 ### `--list`
 
@@ -278,7 +320,40 @@ For each, read frontmatter `slug`, `feature`, `phase`, `last_updated`. Emit a sm
 - Every PR body before `gh pr create`.
 - Every body edit before `gh api -X PATCH`.
 - Every `--ready` before `gh pr ready`.
+- Every label add/remove before `gh pr edit --add-label`/`--remove-label` (lifecycle proposals during resume, cascades during `--drop`/`--ready`, and `--label` invocations).
 - Branch pushes (no `git push` without explicit permission, per memory).
+
+## Labels
+
+Canonical org labels live in `JCSDA-internal/github-admin:github_api/org_labels.py`. The skill manages a small subset; everything else (group tags `INFRA`/`OBS`/etc., partner-org tags, `enhancement`, `do not merge`, `help wanted`, etc.) is left to the human and only adopted into state if observed live.
+
+### Managed lifecycle labels
+
+| Label | Meaning | Apply when | Drop when |
+|---|---|---|---|
+| `bug` | Fixes incorrect behavior in merged code | At PR open if the change is a defect fix (not new feature, not refactor, not warning cleanup) | Stays for the life of the PR |
+| `waiting for another PR` | Blocked on a sibling PR in this set | At PR open if `repos[i].build_groups` is non-empty; on `--drop` if a new dep is recorded | `--drop` removes the last entry from `build_groups` |
+| `waiting for other repos` | Blocked on a model-side change outside this PR set | User explicitly flags an external dep when proposing the set; or an upstream merges that breaks a model interface | The external dep lands |
+| `coordinate merge` | Reviewed and ready, but a sibling in this set still needs to land | Reviews approved AND any sibling has `pr_state` ∈ {open, null} | All siblings reach `pr_state: merged`; or this PR itself merges |
+| `ready for merge` | Reviewed, ready, no coordination needed | Reviews approved AND all siblings already merged (or single-repo set) | This PR merges (label disappears with the PR) |
+
+### Lifecycle interactions
+
+- `waiting for another PR` and `waiting for other repos` are mutually compatible — a PR can be blocked on both kinds of dep simultaneously.
+- `coordinate merge` and `ready for merge` are mutually exclusive; a transition adds one and removes the other.
+- The `waiting for *` labels and the `*ready for merge*` labels are mutually exclusive — never apply both at the same time. If reviews land while a build-group is still open, leave only `waiting for another PR` until the dep clears.
+- Labels are only proposed when they would *change* state — silent if everything matches the lifecycle table.
+
+### gh syntax cheatsheet
+
+```bash
+gh pr create ... --label "bug" --label "waiting for another PR"        # at open; one --label per name
+gh pr edit <n> -R JCSDA-internal/<repo> --add-label "coordinate merge"
+gh pr edit <n> -R JCSDA-internal/<repo> --remove-label "waiting for another PR"
+gh pr view <n> -R JCSDA-internal/<repo> --json labels --jq '[.labels[].name]'
+```
+
+Quote labels with spaces. `gh pr edit --add-label`/`--remove-label` works on JCSDA-internal repos (unlike `--body-file`, which has a known issue documented under `--drop`).
 
 ## URL canonicalization
 

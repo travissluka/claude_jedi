@@ -40,9 +40,9 @@ Verify: `$SPACK_STACK_VER` should print `1.9.2`. Sets `JEDI_ROOT=~/work/jedi`.
 
 ```bash
 cd /home/tsluka/work/jedi/build
-make -j$(nproc)                      # full rebuild
-make <repo>                          # single-repo rebuild: oops, ufo, saber, ...
-cmake /home/tsluka/work/jedi/bundle  # reconfigure
+make -j$(nproc)                                    # full rebuild
+cd /home/tsluka/work/jedi/build/<repo> && make -j  # single-repo rebuild (lib + tests + executables); oops, ufo, saber, ...
+cmake /home/tsluka/work/jedi/bundle                # reconfigure
 
 ctest --output-on-failure -R <pat>   # run tests (append -N to list, -E coding_norms to skip lint)
 ctest --output-on-failure --test-dir build/<repo>

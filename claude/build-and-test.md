@@ -4,7 +4,7 @@
 
 Common build commands, test invocations, and shared dependencies are in `CLAUDE.md`. This file only lists what's *unique* per repo — flags that toggle features, external dependencies beyond the common set, and test naming quirks.
 
-**Shared across all repos** (no need to list per-repo): eckit, fckit, atlas, MPI, NetCDF, Boost, LAPACK, OpenMP. Version pins live in `bundle/CMakeLists.txt`. All repos build via `make <repo>` from the build directory and test via `ctest -R <repo>`.
+**Shared across all repos** (no need to list per-repo): eckit, fckit, atlas, MPI, NetCDF, Boost, LAPACK, OpenMP. Version pins live in `bundle/CMakeLists.txt`. All repos build via `cd build/<repo> && make -j` (lib + tests + executables; `make <repo>` from the top-level `build/` only builds the library, leaving test binaries stale) and test via `ctest -R <repo>`.
 
 ## Build dependency DAG
 

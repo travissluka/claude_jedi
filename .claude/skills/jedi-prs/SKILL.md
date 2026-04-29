@@ -149,9 +149,11 @@ The frontmatter is authoritative. The body is human-readable journal + drafted P
       done
       ```
       Use 1–3 keywords from the slug/feature for `--search`. If no hits, also propose a broader fallback search (e.g., search by changed-file area).
-   b. Surface candidates to user. Ask which (if any) covers this work.
-   c. If none / no fit: propose creating one in the **most-upstream repo** in the set (the repo with the lowest `merge_order`; ties → user picks). Draft a short title (≤60 chars) and a 2–3 sentence body. Default assignee is `travissluka`.
-   d. Determine `closing_repo`: the repo whose PR is **last to merge** (highest `merge_order`; ties → user picks). Its body will carry the `Closes ...` line; all others use `Refs ...`.
+   b. Surface candidates to user. Three outcomes — ask which:
+      - **Reuse existing:** user picks one.
+      - **Open new:** propose creating one in the **most-upstream repo** in the set (lowest `merge_order`; ties → user picks). Draft a short title (≤60 chars) and a 2–3 sentence body using the template at ## Tracking issue. Default assignee is `travissluka`.
+      - **Opt out:** for trivial changes (typo fix, doc cherry-pick, etc.) the user may decline. Set `issue: null`; skip step (c); PR bodies render `## Issue(s) addressed` as `n/a`.
+   c. Determine `closing_repo`: the repo whose PR is **last to merge** (highest `merge_order`; ties → user picks). Its body will carry the `Closes ...` line; all others use `Refs ...`.
 7. Show the user, in one combined message:
    - Per-repo: drafted title + body (with `<TBD-...>` and `<ISSUE-REF>` placeholders still present)
    - Cross-repo plan: merge order table; build-group topology; draft-vs-ready
@@ -159,7 +161,7 @@ The frontmatter is authoritative. The body is human-readable journal + drafted P
    - Label proposal per repo (opening labels only)
    - Tracking issue: existing #N OR proposed `gh issue create` invocation (with title + body + assignee), and the `closing_repo` choice
 8. On approval:
-   a. If a new issue was proposed: open it, capture the number, **then remind the user to set story points in the zenhub UI** (the skill cannot set them — no zenhub CLI installed).
+   a. If user chose **Open new** in 6b: open the issue, capture the number, then print: `⚠️ Set story points in zenhub: <issue.url>` (the skill cannot set them — no zenhub CLI installed). Don't gate on confirmation; just remind.
       ```bash
       gh issue create -R JCSDA-internal/<upstream> \
         --title "<short title>" \
@@ -167,9 +169,11 @@ The frontmatter is authoritative. The body is human-readable journal + drafted P
         --assignee travissluka
       ```
    b. Substitute `<ISSUE-REF>` placeholders in each drafted body:
-      - `closing_repo`'s body: `Closes JCSDA-internal/<issue.repo>#<issue.number>` (or bare `Closes #<n>` if `closing_repo == issue.repo`)
-      - All other repos: `Refs JCSDA-internal/<issue.repo>#<issue.number>`
-   c. **Write the state file** with `phase: DRAFTED`; populate `issue:` block; insert resolved drafted bodies under `## Drafted bodies`; append an `## Active Projects` line to `MEMORY.md`.
+      - If `issue: null` (opted out): replace `<ISSUE-REF>` with `n/a`.
+      - Otherwise:
+        - `closing_repo`'s body: `Closes JCSDA-internal/<issue.repo>#<issue.number>` (or bare `Closes #<n>` if `closing_repo == issue.repo`).
+        - All other repos: `Refs JCSDA-internal/<issue.repo>#<issue.number>`.
+   c. **Write the state file** with `phase: DRAFTED`; populate `issue:` block (or set `issue: null`); insert resolved drafted bodies under `## Drafted bodies`; append an `## Active Projects` line to `MEMORY.md`.
 
 #### Per-repo agent prompt template
 
@@ -227,7 +231,7 @@ Do not run gh commands or interact with GitHub. Branches may not be pushed yet. 
      ```
      Repeat `--label "<name>"` per opening label. Quote multi-word names. See ## Labels.
    - Capture PR number from the output URL.
-5. Update state: set `pr`, `pr_state: open`, `is_draft`, `last_sha`, `labels` (the labels actually passed to `gh pr create`). Update `last_updated`.
+5. Update state: set `pr`, `pr_state: open`, `ci_state: pending`, `is_draft`, `last_sha`, `labels` (the labels actually passed to `gh pr create`). Update `last_updated`.
 6. After all PRs in all groups open, set `phase: OPEN`.
 
 User can interrupt between merge-order groups and resume later.
@@ -250,12 +254,13 @@ User can interrupt between merge-order groups and resume later.
    ```
    Derive `ci_state` from the rollup map: any FAILURE/CANCELLED/TIMED_OUT → `fail`; all SUCCESS (or SUCCESS+SKIPPED) → `green`; any PENDING/QUEUED/IN_PROGRESS without a fail → `pending`; empty rollup → `unknown`.
    For each repo with `pr: null` in state: `gh pr list -R JCSDA-internal/<repo> --search "head:<branch>" --json number,state,url`.
+   If `issue` is non-null, also query: `gh issue view <issue.number> -R JCSDA-internal/<issue.repo> --json state,closedAt --jq '{state, closedAt}'`. Update `issue.state` from the result.
 3. **Force-push detection.** After `git -C bundle/<repo> fetch origin <branch>`, run `git -C bundle/<repo> rev-parse origin/<branch>` and compare to `last_sha` via **prefix match** — state stores ≥7-char SHAs, the comparison is `case "$new_sha" in $old_sha*) match;; *) DRIFT;; esac`. Direct string equality flags spurious drift when SHA lengths differ.
 4. Reconcile:
    - **Match** → proceed.
    - **Non-destructive drift** (CI status changed, body edited externally, new commits past the same fast-forward line): update frontmatter; append a dated line to `## Reconciliation log`. (Skipped if `--show`.)
-   - **Destructive drift** (PR closed/deleted, branch force-pushed onto a commit that is NOT a descendant of `last_sha`, or `gh pr list` returned an unexpected PR for a `pr: null` branch): **stop**, show what changed, ask user before mutating state.
-5. Print status table using emoji for `pr_state`, `ci`, and `draft`:
+   - **Destructive drift** (PR closed/deleted, branch force-pushed onto a commit that is NOT a descendant of `last_sha`, `gh pr list` returned an unexpected PR for a `pr: null` branch, or tracking issue closed before the `closing_repo` PR has merged): **stop**, show what changed, ask user before mutating state.
+5. Print a one-line **tracking issue** header (`Tracking issue: <issue.url> (<state>)`, or `Tracking issue: (none — opted out)`), then a status table using emoji for `pr_state`, `ci`, and `draft`:
 
    | Glyph | `pr_state` | `ci_state` | `is_draft` |
    |---|---|---|---|
@@ -278,7 +283,7 @@ User can interrupt between merge-order groups and resume later.
    | saber     | feature/implicit-vertical-diffusion | #1234 | 🟢    | 🔴 | aa320319  | 2     |       | oops#3275    | bug, waiting for another PR     |
    ```
 
-   Sort rows by `merge_order` ascending (then by repo name within a level). Render `build_groups` as `repo#PR` shorthand for compactness; full URLs only in state. Labels: comma-separated, lowercase as-stored on GitHub; show `(none)` if empty.
+   Sort rows by `merge_order` ascending (then by repo name within a level). Render `build_groups` as `repo#PR` shorthand for compactness; full URLs only in state. Labels: comma-separated, displayed as-stored on GitHub (org labels mix case — `bug`, `INFRA`, `Epic`); show `(none)` if empty.
 6. **Label-drift reconciliation.** Compare each repo's live `labels` to state `labels`:
    - Live ⊃ state: someone added a label outside the skill — adopt it into state silently (no decision-log entry needed for human-curated labels like `INFRA`, `OBS`, partner-org tags).
    - Live ⊂ state: a managed label was removed externally — log to `## Reconciliation log` and re-propose if the lifecycle (## Labels) still calls for it.
@@ -289,13 +294,14 @@ User can interrupt between merge-order groups and resume later.
    - "Draft `<repo>#<n>` CI is green → convert to ready?"
    - "Reviewers approved `<repo>#<n>` → add `coordinate merge` (siblings still in flight) / `ready for merge` (this is the last in the order)?"
    - "Failing CI on `<repo>#<n>` → investigate before next step."
+   - "Tracking issue closed but `closing_repo` PR not merged — confirm intentional?"
 
 ### `--ready <repo>`
 
 1. Confirm with user. Also propose, in the same prompt, the appropriate review-stage label per ## Labels:
    - `coordinate merge` if any sibling PR in the set has `pr_state` ∈ {open, null} (still in flight).
    - `ready for merge` if all siblings are `merged` (or this is a single-repo set).
-   Both are draft-incompatible — the label transition is paired with the draft→ready flip.
+   Both review-stage labels imply the PR is review-ready, so they should only be applied at the moment of the draft→ready flip — pair the label add with the flip in the same Bash block.
 2. Run in a single Bash block so failure of one stops the rest:
    ```bash
    gh pr ready <n> -R JCSDA-internal/<repo> && \
@@ -345,6 +351,16 @@ ls "$CLAUDE_CONFIG_DIR/projects/$(pwd | tr / -)/memory"/project_*_prs.md 2>/dev/
 ```
 
 For each, read frontmatter `slug`, `feature`, `phase`, `last_updated`. Emit a small table.
+
+### CLOSED — wrap up
+
+When all PRs are merged, the user explicitly transitions to `phase: CLOSED`:
+
+1. Confirm all `pr_state: merged` (or `closed` for any abandoned).
+2. Write a stable project memory under `<memory-dir>/project_<slug>_summary.md` capturing what shipped (PRs, merge dates, key API additions). This is a normal `type: project` memory, not a state file.
+3. Prompt user to delete the `project_<slug>_prs.md` state file and the `## Active Projects` index entry.
+
+The skill never auto-closes.
 
 ## Approval gates (always)
 
@@ -398,15 +414,11 @@ The skill **cannot** set zenhub story points (no zenhub CLI installed; would nee
 
 ### Opting out
 
-If the user explicitly declines an issue (one-line typo fix, doc cherry-pick, etc.):
-
-- Set `issue: null` in state.
-- All PR bodies render `## Issue(s) addressed` as `n/a`.
-- Decision log records the opt-out with a one-line rationale.
+The opt-out path (chosen at NEW step 6b) sets `issue: null` in state, renders `## Issue(s) addressed` as `n/a` in every PR body, and writes a one-line rationale to the decision log.
 
 ### Resume reconciliation
 
-On bare-resume, `gh issue view <n> -R JCSDA-internal/<issue.repo> --json state,closedAt --jq '{state, closedAt}'` runs alongside the PR queries. If `state == CLOSED` but no `closing_repo` PR has merged: surface as **destructive drift** (the issue was closed externally — likely intentional, but worth confirming the closing PR doesn't still need to merge with `Closes`).
+Wired into the Resume workflow above: step 2 queries `gh issue view` alongside the PR queries; step 4 surfaces external issue-closure (before the `closing_repo` PR has merged) as destructive drift.
 
 ## Labels
 
@@ -424,10 +436,16 @@ Canonical org labels live in `JCSDA-internal/github-admin:github_api/org_labels.
 
 ### Lifecycle interactions
 
-- `waiting for another PR` and `waiting for other repos` are mutually compatible — a PR can be blocked on both kinds of dep simultaneously.
-- `coordinate merge` and `ready for merge` are mutually exclusive; a transition adds one and removes the other.
-- The `waiting for *` labels and the `*ready for merge*` labels are mutually exclusive — never apply both at the same time. If reviews land while a build-group is still open, leave only `waiting for another PR` until the dep clears.
-- Labels are only proposed when they would *change* state — silent if everything matches the lifecycle table.
+A PR is in one of two label-states:
+
+- **Blocked** — has zero or more `waiting for *` labels (the two `waiting for *` variants can coexist).
+- **Mergeable** — has exactly one of `coordinate merge` or `ready for merge`.
+
+The two states are mutually exclusive: never apply a `waiting for *` label and a `coordinate merge`/`ready for merge` label to the same PR at the same time. If reviews land while a build-group is still open, the PR stays Blocked — leave the `waiting for *` label in place; do not add `coordinate merge` until the dep clears.
+
+`bug` is independent of the blocked/mergeable axis and may coexist with any label.
+
+Labels are only proposed when they would *change* state — silent if everything matches the lifecycle table.
 
 ### gh syntax cheatsheet
 
@@ -446,13 +464,5 @@ All build-group URLs in state and bodies are normalized to:
 ```
 https://github.com/JCSDA-internal/<repo>/pull/<n>
 ```
-Strikethrough matching depends on string equality. If a user passes `JCSDA-internal/oops#3275` or `https://github.com/JCSDA-internal/oops/pull/3275/files`, normalize first.
+`--drop` matches `build-group=<url>` lines by string equality, so non-canonical inputs would silently miss. If a user passes `JCSDA-internal/oops#3275` or `https://github.com/JCSDA-internal/oops/pull/3275/files`, normalize first.
 
-## Closing out
-
-When all PRs are merged, the user explicitly transitions to `phase: CLOSED`:
-1. Confirm all `pr_state: merged` (or `closed` for any abandoned).
-2. Write a stable project memory under `<memory-dir>/project_<slug>_summary.md` capturing what shipped (PRs, merge dates, key API additions). This is a normal `type: project` memory, not a state file.
-3. Prompt user to delete the `project_<slug>_prs.md` state file and the `## Active Projects` index entry.
-
-The skill never auto-closes.

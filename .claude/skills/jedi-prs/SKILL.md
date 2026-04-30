@@ -108,7 +108,7 @@ repos:
     ci_state: null      # pending | green | failing | unknown
     last_sha: <8-char>  # for force-push detection (prefix-match)
     merge_order: 1      # ties allowed (parallel)
-    is_draft: true      # always; user approves --ready to convert + trigger CI
+    is_draft: false     # default; only `true` for highly-experimental single-PR work or circular cross-repo deps
     build_groups: []    # canonical https://github.com/JCSDA-internal/<repo>/pull/<n>
     labels: []          # current GH labels
 ---
@@ -127,14 +127,16 @@ Body sections: `## Drafted bodies` (per-repo title + body, used at DRAFTED→OPE
 
 ## Issue-closure rule (load-bearing)
 
-Exactly **one** PR in a coordinated set carries `Closes`; **every other PR** carries `Refs`. No exceptions.
+Exactly **one** PR in a coordinated set uses `Resolves` to auto-close the tracking issue; **every other PR** carries a bare bullet reference (no keyword). The `## Issue(s) addressed` section is always a markdown bullet list — the canonical template's plain-line example is overridden by the user's preference for bullets (renders better next to the bulleted Dependencies lists).
 
-- The closer is the **last-to-merge** PR (the unique repo at the highest `merge_order`). If multiple repos tie for highest `merge_order`, the user picks one and the rest fall back to `Refs`.
-- Closer body: `Closes JCSDA-internal/<issue.repo>#<n>` — or bare `Closes #<n>` when the closer's repo equals `issue.repo`.
-- All others: `Refs JCSDA-internal/<issue.repo>#<n>` — or bare `Refs #<n>` when the PR's repo equals `issue.repo`.
-- If the user opted out of a tracking issue: `<ISSUE-REF>` becomes the literal `n/a` for every PR; no `Closes` or `Refs` lines.
+- The closer is the **last-to-merge** PR (the unique repo at the highest `merge_order`). If multiple repos tie for highest `merge_order`, the user picks one and the rest fall back to bare-bullet refs.
+- Closer body: `- Resolves JCSDA-internal/<issue.repo>#<n>` — or `- Resolves #<n>` when the closer's repo equals `issue.repo`.
+- All other PRs: `- JCSDA-internal/<issue.repo>#<n>` — or `- #<n>` when the PR's repo equals `issue.repo`. **No `Refs` keyword.** Bare bullet ref creates the GitHub backlink without auto-closing.
+- If the user opted out of a tracking issue: `<ISSUE-REF>` becomes the literal `n/a` for every PR (still under the heading); no bullet refs, no keyword.
 
-The state file's `issue.closing_repo` is the source of truth for who closes. If merge-order changes after PRs are open (e.g., user revises plan), update `closing_repo` and re-edit body lines via `gh api -X PATCH` (same path as `--drop`) so exactly one PR still closes.
+GitHub's auto-close keyword (`Resolves`/`Closes`/`Fixes`) works inside markdown bullets — what GitHub looks for is the keyword + ref pattern, not the surrounding markup. Cross-repo `Resolves JCSDA-internal/<repo>#<n>` works within the same org but auto-close is less reliable than same-repo; flag manual close as a fallback in the decision log.
+
+The state file's `issue.closing_repo` is the source of truth for who closes. If merge-order changes after PRs are open (e.g., user revises plan), update `closing_repo` and re-edit body lines via `gh api -X PATCH` (same path as `--drop`) so exactly one PR still uses `Resolves`.
 
 ## Workflow
 
@@ -147,8 +149,8 @@ The state file's `issue.closing_repo` is the source of truth for who closes. If 
 5. Synthesize — **think hard** about merge order per `claude/pr-conventions.md`:
    - PR nature (additive / breaking / mixed) from each agent.
    - Merge order: a PR is independently mergeable if its CI passes against current `develop` of others. Build-DAG informational, not authoritative.
-   - **Minimal `build_groups`**: only PRs whose CI cannot pass without the matching change.
-   - `is_draft`: **always true** — ALL PRs open as draft so the user can inspect and make manual edits before CI is triggered.
+   - **Minimal `build_groups`**: only PRs whose CI cannot pass without the matching change. Note that the bundle CI runs sibling repos' tests too, not just the repo's own — so if PR-X depends on PR-Y, AND PR-Y depends on PR-Z, then PR-X's `build_groups` should usually include both PR-Y and PR-Z (transitive). Don't rely on the bundle resolver to follow chains.
+   - `is_draft`: **default `false`** — open PRs as Ready when the user has reviewed the change with you (the common case). Use `--draft` only when the change is a single PR of highly experimental code that Claude produced largely autonomously (the user wants a buffer to inspect before CI), or when there is an unavoidable circular cross-repo dependency. When in doubt, ask the user.
    - Resolve `<TBD-<repo>-PR>` placeholders into a coherent plan.
    - Reviewer candidates: dedupe across repos into one ranked list (surfaced in step 7 as suggestions only).
    - **Opening labels per repo** (see ## Reference for full lifecycle):
@@ -156,7 +158,7 @@ The state file's `issue.closing_repo` is the source of truth for who closes. If 
      - `waiting for another PR` if `build_groups` non-empty.
      - `waiting for other repos` only if user flagged an external (model-side) dep.
      - `coordinate merge` / `ready for merge` are NOT opening labels (review-stage only).
-   - **Merge-order validation**: if any `build_groups` are non-empty, devise a minimal set of branch-combination tests to confirm the assumed order. For each dependency edge (A must merge before B): describe (a) building/testing B against A's current `develop` (should fail — confirms the dep exists) and (b) building/testing B against A's feature branch (should pass — confirms the fix). Use the jft skill's feature-tree concept for isolation: suggest specific `ctest -R` patterns and which repos to pin at which branches. If all PRs are independently mergeable (no `build_groups`) — skip and note "independently mergeable, no order testing needed." Include a concise testing plan in step 7.
+   - **Merge-order validation**: if any `build_groups` are non-empty, devise a minimal set of branch-combination tests to confirm the assumed order. For each dependency edge (A must merge before B): describe (a) building/testing B against A's current `develop` (should fail — confirms the dep exists) and (b) building/testing B against A's feature branch (should pass — confirms the fix). Use the jft skill's feature-tree concept for isolation when available; otherwise switch the dependency repo to develop in the existing tree, rebuild the dependent + downstream, run the targeted ctest, then restore. **Each branch checkout requires its own explicit per-action approval** even if the user has approved the overall test plan — the `feedback_no_branch_switch.md` rule supersedes implicit consent. Note that the user's environment has `VALIDATE_PARAMETERS=1`, so YAML strict-validation failures are a common failure signature for missing dependencies. If all PRs are independently mergeable (no `build_groups`) — skip and note "independently mergeable, no order testing needed." Include a concise testing plan in step 7.
 6. **Tracking issue** — every PR set should reference one (zenhub uses these for story-point tracking).
    a. Search candidates across affected repos (1–3 keywords from slug/feature):
       ```bash
@@ -168,7 +170,7 @@ The state file's `issue.closing_repo` is the source of truth for who closes. If 
       ```
    b. Three outcomes — ask user:
       - **Reuse existing:** user picks one.
-      - **Open new:** in the **closing repo** — the unique repo at the highest `merge_order`, same one that gets `closing_repo` and carries `Closes` in its PR body (ties → user picks). GitHub auto-close only fires when the issue and the closing PR live in the same repo; opening the issue anywhere else forces a manual close after merge. Short title (≤60 chars), 2–3 sentence body, default assignee `travissluka`. Body template:
+      - **Open new:** in the **closing repo** — the unique repo at the highest `merge_order`, same one that gets `closing_repo` and carries `Resolves` in its PR body (ties → user picks). Same-repo `Resolves #<n>` reliably auto-closes; cross-repo `Resolves JCSDA-internal/<repo>#<n>` is supported within the same org but auto-close is less reliable, so flag manual close as a fallback in the decision log. Short title (≤60 chars), 2–3 sentence body, default assignee `travissluka`. Body template:
         ```
         <one-paragraph summary of the goal>
 
@@ -179,10 +181,16 @@ The state file's `issue.closing_repo` is the source of truth for who closes. If 
         Story points: TBD (set in zenhub).
         ```
       - **Opt out:** for trivial fixes. Set `issue: null`; `<ISSUE-REF>` becomes `n/a`; one-line rationale to decision log.
-   c. (Skip if opted out.) Determine `closing_repo` per the **Issue-closure rule** above: the unique repo at the highest `merge_order`; ties → user picks one. Cross-repo close keywords (`Closes JCSDA-internal/<repo>#<n>`) work within the same org.
+   c. (Skip if opted out.) Determine `closing_repo` per the **Issue-closure rule** above: the unique repo at the highest `merge_order`; ties → user picks one. Cross-repo `Resolves JCSDA-internal/<repo>#<n>` works within the same org.
 7. Show user, in one combined message:
-   - Per-repo drafted title + body (with `<TBD-...>` and `<ISSUE-REF>` placeholders)
-   - Cross-repo plan: merge-order table; build-group topology; all PRs will open as draft
+   - Per-repo drafted title + body (with `<TBD-...>` and `<ISSUE-REF>` placeholders) — bodies must follow the canonical PR template (## Description / ## Issue(s) addressed / ## Dependencies / ## Impact / ## Manual Testing Instructions (optional) / ## Checklist) with the canonical Checklist verbatim:
+     ```
+     - [x] I have performed a self-review of my own code
+     - [x] I have made corresponding changes to the documentation
+     - [x] I have run the unit tests before creating the PR
+     ```
+     (Tick all three by default; the user can untick if not applicable.) Issue refs use bullet style per the **Issue-closure rule**.
+   - Cross-repo plan: merge-order table; build-group topology; whether each PR opens Ready (default) or Draft (only if highly-experimental single PR or circular dep)
    - Merge-order test plan (or "independently mergeable, no testing needed")
    - Reviewer suggestions (NOT assigned)
    - Opening labels per repo
@@ -196,7 +204,7 @@ The state file's `issue.closing_repo` is the source of truth for who closes. If 
         --assignee travissluka
       ```
       Then print `⚠️ Set story points in zenhub: <issue.url>` (skill cannot — no zenhub CLI). Don't gate on confirmation; just remind.
-   b. Substitute `<ISSUE-REF>` placeholders per the **Issue-closure rule** above. Verify exactly one PR ends up with `Closes` and every other PR with `Refs` (or all `n/a` if opted out).
+   b. Substitute `<ISSUE-REF>` placeholders per the **Issue-closure rule** above. Verify exactly one PR uses `- Resolves ...` and every other PR uses a bare bullet ref (or all `n/a` if opted out).
    c. Write state file as `phase: DRAFTED`; populate the `issue:` block (or `issue: null` if opted out); insert resolved bodies under `## Drafted bodies`; append `## Active Projects` line in `MEMORY.md`.
 
 ### DRAFTED — open PRs
@@ -206,20 +214,33 @@ The state file's `issue.closing_repo` is the source of truth for who closes. If 
 3. Group repos by `merge_order`. Open lowest-numbered group first; within a group, parallel (one Bash block, multiple `gh pr create`).
 4. For each PR:
    - Read drafted body from `## Drafted bodies` → `### <repo>`.
-   - Substitute resolved URLs into `<TBD-X-PR>` placeholders. URL form: `https://github.com/JCSDA-internal/<repo>/pull/<n>`.
-   - Show **final** body + opening labels. On approval:
+   - Substitute resolved URLs into `<TBD-X-PR>` placeholders for any sibling that's already open. URL form: `https://github.com/JCSDA-internal/<repo>/pull/<n>`. Sibling references that are not yet open (e.g., the depended-by list of an upstream PR) stay as `<TBD-X-PR>` placeholders for now and get patched in step 7.
+   - Show **final** body + opening labels + draft flag. On approval:
      ```bash
-     gh pr create -R JCSDA-internal/<repo> \
-       --title "<title>" \
-       --body-file /tmp/jedi-prs-<slug>-<repo>-body.md \
-       --assignee travissluka \
-       [--label "bug"] [--label "waiting for another PR"] \
-       --draft
+     ( cd bundle/<repo> && gh pr create \
+         --title "<title>" \
+         --body-file /tmp/jedi-prs-<slug>-<repo>-body.md \
+         --assignee travissluka \
+         --base develop --head <branch> \
+         [--label "bug"] [--label "waiting for another PR"] \
+         [--draft] )
      ```
-     One `--label "<name>"` per opening label. Quote multi-word names. `--draft` is always passed.
+     `cd` into the repo so `gh` resolves the upstream automatically; running from the bundle parent fails with "Head sha can't be blank" because `gh` defaults to your fork's `main`. One `--label "<name>"` per opening label; quote multi-word names. `--draft` only when `is_draft: true` for that repo (default omitted).
    - Capture PR number from output URL.
-5. Update state: `pr`, `pr_state: open`, `ci_state: unknown` (CI not triggered until `--ready`), `is_draft: true`, `last_sha`, `labels` (those actually passed). Update `last_updated`.
+   - **Empty-commit retrigger** if needed: when a PR opens with `build-group=` lines and CI doesn't pick them up on first run (e.g., draft→ready transition didn't fire CI, or the parser timed out), follow with:
+     ```bash
+     git -C bundle/<repo> commit --allow-empty -m 'trigger CI' && git -C bundle/<repo> push
+     ```
+     Otherwise skip — opening a non-draft PR triggers CI automatically.
+5. Update state: `pr`, `pr_state: open`, `ci_state: pending` (non-draft) or `unknown` (draft), `is_draft` (per repo, as opened), `last_sha`, `labels` (those actually passed). Update `last_updated`.
 6. After all groups open, set `phase: OPEN`. User can interrupt between groups.
+7. **Post-open placeholder substitution.** Walk every PR opened in earlier groups and check its body for surviving `<TBD-X-PR>` placeholders (depended-by lists in upstream PRs reference downstream PRs that didn't exist when the upstream opened). For each, fetch the live body, substitute, and PATCH:
+   ```bash
+   gh pr view <pr> -R JCSDA-internal/<repo> --json body --jq .body > /tmp/jedi-prs-<slug>-<repo>-body.md
+   sed -i 's|<TBD-<sibling>-PR>|https://github.com/JCSDA-internal/<sibling>/pull/<n>|g' /tmp/jedi-prs-<slug>-<repo>-body.md
+   gh api -X PATCH "repos/JCSDA-internal/<repo>/pulls/<pr>" -F body=@/tmp/jedi-prs-<slug>-<repo>-body.md --jq .url
+   ```
+   Single combined approval gate covers all the PATCHes for this set.
 
 ### `--import <repo>:<pr#> ...`
 

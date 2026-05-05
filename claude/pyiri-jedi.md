@@ -1,6 +1,6 @@
 # PyIRI-JEDI
 
-> Last updated against commit `7303c282` (2026-04-23). Run `cd bundle/pyiri-jedi && git log --oneline 7303c282..HEAD` to see what changed since.
+> Last updated against commit `de3c1af0` (2026-05-04). Run `cd bundle/pyiri-jedi && git log --oneline de3c1af0..HEAD` to see what changed since.
 >
 > **Covers:** pyiri::Traits, PyIRI Python submodule, ObsSpacePyiri, ObsIterator, FieldsPyiri/StatePyiri, LETKF for ionosphere, field-line tracing, VTEC/slant TEC/electron density obs, CFFI Python↔Fortran bindings, custom interpolators for field-aligned geometry.
 

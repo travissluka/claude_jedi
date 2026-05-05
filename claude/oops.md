@@ -1,6 +1,6 @@
 # OOPS (Object Oriented Prediction System)
 
-> Last updated against commit `444b5967` (2026-04-28). Run `cd bundle/oops && git log --oneline 444b5967..HEAD` to see what changed since.
+> Last updated against commit `5f7e9a78` (2026-05-05). Run `cd bundle/oops && git log --oneline 5f7e9a78..HEAD` to see what changed since.
 >
 > **Covers:** Variational, CostFunction, CostFct3DVar/3DFGAT/4DVar/WC4DVar/4DEnsVar, CostJo, CostJb3D/4D/Jq, Minimizer (PCG/DRPCG/FGMRES/RPCG/...), LocalEnsembleSolver, LETKF/GETKF (Deterministic/Stochastic), SequentialEnsembleSolver/EAKF, LocalEnsembleDA, Observer, Observers, Variables, FieldSet3D/4D, FieldSets, IncrementSet, StateSet, GeometryData, PseudoModel, CommRedistribution, CommRedistributionRepository, FieldSetSubCommunicators, Application runs (Forecast/HofX/EDA/GenEnsPertB/...), inflation (RTPP/RTPS/mult), cross-validation, Nerger regulation, L95/QG toy models.
 
@@ -18,8 +18,8 @@ Build/test quirks in `claude/build-and-test.md`.
 | `base/` | Higher-level OOPS objects built on `interface/` (e.g., `oops::State<MODEL>`, `FieldSet3D`, `FieldSets`, `Variables`, `GeometryData`, `IncrementSet`, `StateSet`). This is where most algorithmic logic lives. |
 | `assimilation/` | DA algorithms: cost functions (`CostFunction`, `CostFct3DVar`, `CostFct4DEnsVar`), minimizers (17 total), and local ensemble solvers (5 total). |
 | `runs/` | Top-level `Application` subclasses that serve as entry points: `Variational`, `Forecast`, `LocalEnsembleDA`, `HofX3D`, `HofX4D`, `EDA`, etc. Each `Application::execute()` reads a YAML config and runs end-to-end. |
-| `generic/` | Model-independent implementations: `IdentityModel`, `HybridLinearModel`, `AtlasInterpolator`, FFT utilities, HTLM tools. |
-| `util/` | Utilities: `DateTime`, `Duration`, `Logger`, `ConfigFunctions`, MPI helpers, Fortran interop. Includes `Factory.h` (generic factory template with variadic maker args). |
+| `generic/` | Model-independent implementations: `IdentityModel`, `HybridLinearModel`, `AtlasInterpolator`, `UnstructuredInterpolator` (triangulation-based; supports nearest-neighbor fill outside regional domains via YAML keys `regional check enabled` (bool, default true) and `regional nn fill distance in km` — chord distance), FFT utilities, HTLM tools. |
+| `util/` | Utilities: `DateTime`, `Duration`, `Logger`, `ConfigFunctions`, MPI helpers, Fortran interop. Includes `Factory.h` (generic factory template with variadic maker args) and `FunctionSpaceHelpers.h` (`isRegional`, `getSizeOwned`, `countOwned`, `executeFunc` dispatcher over concrete ATLAS function-space types). |
 | `util/redistribution/` | `CommRedistribution` (abstract) for repartitioning ATLAS fields between parent/sub communicators. Concrete: `CommGatherScatterRedistribution` (gather-scatter) and `CommStraightRedistribution` (direct MPI `allToAllv` with global-index mapping, cached for reuse — uses `detail/AllToAllRouting` helper). `CommRedistributionCompatChecker` validates compatibility. `CommRedistributionRepository` (PR #3196) is a multiton cache keyed on (parent FunctionSpace, sub FunctionSpace, method string); callers obtain an existing plan via `get()` instead of reconstructing the (costly) redistribution each call. |
 | `mpi/` | MPI communicator management for ensemble/model decomposition. `ColorInfo` analyzes MPI color grouping in split communicators. `Scope` provides RAII temporary communicator switching. |
 | `atlas/` | Atlas-based interpolation wrappers. |
@@ -38,7 +38,7 @@ Build/test quirks in `claude/build-and-test.md`.
 
 **`oops::StateSet`** (`base/StateSet.h`) — Collection of `State<MODEL>` objects distributed across time steps and ensemble members. Extends `DataSetBase<State<MODEL>, Geometry<MODEL>>`. Replaces the retired `StateEnsemble` and `StateEnsemble4D` classes (removed in PR #3147). Provides `ens_mean()` to compute ensemble mean and `transpose()` to redistribute states across communicators.
 
-**`oops::GeometryData`** (`base/GeometryData.h`) — Provides spatial queries on model grids: `closestTask(lat, lon)`, `containingTriangleAndBarycentricCoords()`, KD-tree indexing. Not a model interface — it's a utility wrapping ATLAS function spaces.
+**`oops::GeometryData`** (`base/GeometryData.h`) — Provides spatial queries on model grids: `closestTask(lat, lon)`, `closestPointWithinRadius(lat, lon, radius_m)` (returns task-local index of the globally-nearest owned point within the chord-distance radius, or `nullopt`), `containingTriangleAndBarycentricCoords()`, KD-tree indexing (global node tree now keyed on `(idx, idx)` pairs to support cross-task lookups). Not a model interface — it's a utility wrapping ATLAS function spaces.
 
 ## Toy Models
 
@@ -99,7 +99,7 @@ Every variational cost function minimizes `J(x) = Jb + Jo [+ Jc]` where Jb is th
 Configured within `local ensemble DA` section:
 
 - **RTPP** (`rtpp`): Relaxation To Prior Perturbation — blends analysis perturbations with prior perturbations. Value 0–1 (0 = pure analysis, 1 = pure prior).
-- **RTPS** (`rtps`): Relaxation To Prior Spread — relaxes analysis spread toward prior spread. Value 0–1.
+- **RTPS** (`rtps`): Relaxation To Prior Spread — relaxes analysis spread toward prior spread. Value 0–1. Multiplier is γ = (1−α) + α·(σ_b/σ_a). For an `IncrementSet`, the inflation now uses an incremental form `dxa_i ← γ·dxa_i + (γ−1)·(xb'_i − dxa_mean)` (PR #3278) so increment- and state-based paths give equivalent results. Reference: Inverarity et al. 2023 §3 (QJRMS, doi:10.1002/qj.4431).
 - **Multiplicative** (`mult`): Uniform multiplicative inflation factor applied to all perturbations.
 
 ## Observation Distribution Modes

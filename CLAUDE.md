@@ -85,7 +85,7 @@ Build is a DAG, not a chain — model-interface repos (fv3-jedi, soca, mpas-jedi
 | `mpi-patterns.md` | commTime/commEns splitting, ensemble distribution, GetValues allToAll |
 | `build-and-test.md` | per-repo unique build flags, optional deps, test-naming quirks |
 | `maintainers.md` | per-repo GitHub handles for ping/escalation on stalled PRs (sourced from `JCSDA-internal/github-admin` terraform) |
-| `pr-conventions.md` | PR-description annotations (`build-group=`, `run-ci-on-draft=`), CI re-trigger, common mistakes |
+| `pr-conventions.md` | **READ FIRST when authoring any PR.** Template structure (section headings + literal checklist), authoring workflow (gather context → draft → user review → open → assign reviewers after CI green), Dependencies section format, `build-group=` / `run-ci-on-draft=` annotation syntax, CI re-trigger, common mistakes |
 | `INDEX.md` | keyword/symbol → file/section index |
 
 ### Keeping docs current

@@ -1,6 +1,6 @@
 # Coupling (Coupled Atmosphere-Ocean DA)
 
-> Last updated against commit `d468220b` (2026-03-26). Run `cd bundle/coupling && git log --oneline d468220b..HEAD` to see what changed since.
+> Last updated against commit `2538d806` (2026-04-30). Run `cd bundle/coupling && git log --oneline 2538d806..HEAD` to see what changed since.
 >
 > **Covers:** oops::TraitCoupled<Traits1,Traits2>, oops::GeometryCoupled, oops::StateCoupled, oops::AuxCoupledModel, BlockDiagonalCovarianceCoupled, YAML `covariance model: Coupled Block Diagonal`, FV3-JEDI + SOCA coupled 3D-Var, OASIM ocean color operator.
 
@@ -110,6 +110,8 @@ geometry:
     fields metadata: data_static/fields_metadata.yml
   FV3JEDI exclude variables: [skin_temperature_at_surface_where_sea]
 ```
+
+**Per-model variable resolution** (oops#3244 / coupling#76, 2026-04-30): for each `<modelName>` in the coupled geometry, the variable list is resolved as `vars = (<modelName> variables ?? defaults) + <modelName> include variables − <modelName> exclude variables`. The `<modelName> variables:` key is a *full override* of the model's defaults (which come from `ModelData<MODEL>::defaultVariables()`); include and exclude both apply additively. Previously, include and exclude were mutually exclusive (include alone, or defaults-minus-exclude). Variables present in both models' resolved lists trigger a `BadParameter` exception — use exclude on one side to disambiguate.
 
 ### Coupled Model
 

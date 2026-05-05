@@ -1,6 +1,6 @@
 # Cross-Repo Interactions
 
-> Last updated 2026-04-22. Based on the same repo commits as the individual `claude/*.md` files.
+> Last updated 2026-04-30. Based on the same repo commits as the individual `claude/*.md` files.
 >
 > **Covers:** MODEL template contract (Geometry/State/Increment/Model/LinearModel/VariableChange/LinearVariableChange/ErrorCovariance/ModelAux*/LocalInterpolator/ModelData), ufo::ObsTraits, GetValues<MODEL,OBS>, saber::ErrorCovariance<MODEL>, instantiateCovarFactory, instantiateObsFilterFactory, instantiateObsLocFactory, ATLAS as shared data layer, impact map (what-changes-affects-what), C++/Fortran interop patterns (ISO_C_BINDING / opaque-handle / ATLAS bridge), coupled DA, CRTM integration.
 
@@ -99,7 +99,7 @@ Auxiliary state for model bias/parameters; minimal stubs in most repos. ModelAux
 
 ### ModelData — `ModelData(Geometry)`
 
-`modelData()` (metadata as config), static `defaultVariables()`.
+`modelData()` (metadata as config), `defaultVariables() const` (instance method as of oops#3244, 2026-04-30 — looks up defaults from the `Geometry`'s `FieldMetaData`; model-interface repos must implement `oops::Variables defaultVariables() const`, not the previous `static`).
 
 ### LocalInterpolator — `LocalInterpolator(Configuration, Geometry, lats, lons)`
 

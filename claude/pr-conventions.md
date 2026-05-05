@@ -2,13 +2,27 @@
 
 > Cheat-sheet for writing JCSDA-internal pull request descriptions correctly.
 >
-> **Covers:** PR authoring workflow (review before opening, self-assignment, reviewer-after-CI), PR template structure, Dependencies section content (depends-on / depended-by / build-groups), determining merge order from code-change content (not just the build-DAG), disabling stale build-groups as upstreams merge, `build-group=` and `run-ci-on-draft=` annotation syntax, draft-mode workflow for circular cross-repo dependencies, CI re-trigger via empty commit, prose-reference syntax for cross-repo PRs, labels.
+> **Covers:** PR authoring workflow (review before opening, self-assignment, reviewer-after-CI), PR template structure, Dependencies section content (depends-on / depended-by / build-groups), determining merge order from code-change content (not just the build-DAG), disabling stale build-groups as upstreams merge, `build-group=` and `run-ci-on-draft=` annotation syntax, draft-mode workflow (CI deferral pattern + circular cross-repo cycles), CI re-trigger via empty commit, prose-reference syntax for cross-repo PRs, labels.
 
 Canonical jedi-docs source: `bundle/jedi-docs/docs/working-practices/testing.rst` — section "Testing Development across Multiple Repositories". This file is a distilled local copy of the rules + a record of the project's preferred PR-authoring conventions.
 
 ## Authoring workflow
 
 When preparing a PR for the author's review, follow this sequence:
+
+0. **Gather context before drafting.** Don't write a PR body from memory; the project's house style and the live template are the source of truth.
+   - Re-read this file's "Template" and "Dependencies section" sections — section ordering and checklist text must match the JCSDA template literally (don't invent custom checklist items, don't add "Reviewer candidates" / "Performance results" headings as top-level sections — that content goes inside `## Description`).
+   - Fetch the live template in case it has changed:
+     ```bash
+     gh api 'repos/JCSDA-internal/.github/contents/PULL_REQUEST_TEMPLATE.md' \
+       | python3 -c "import json,sys,base64; d=json.load(sys.stdin); print(base64.b64decode(d['content']).decode())"
+     ```
+   - Scan 2–3 recently merged PRs in the target repo for tone and section length:
+     ```bash
+     gh pr list --repo JCSDA-internal/<repo> --state merged --limit 5 --json number,title,url
+     gh pr view <number> --repo JCSDA-internal/<repo>
+     ```
+   - Check feedback memory for PR-related entries (`feedback_pr_*`, `feedback_cross_repo_pr_refs`, `feedback_pr_strikethrough_stale_buildgroup`, `feedback_pr_authoring_workflow`, `feedback_pr_issue_bullet_style`, `feedback_pr_build_group_syntax`).
 
 1. **Draft the full PR text** (title + body following the template structure below) and surface it in chat for review *before* calling `gh pr create`. Do not open the PR until the user has approved the wording.
 2. Along with the body, propose:
@@ -17,7 +31,7 @@ When preparing a PR for the author's review, follow this sequence:
 3. Once approved, open the PR with `gh pr create`, including:
    - `--assignee <user>` — the PR is always self-assigned to the author
    - The agreed body and title
-   - Draft mode (`--draft`) only when the change set has unavoidable circular cross-repo deps; otherwise open as Ready.
+   - Draft mode (`--draft`) when the change set has unavoidable circular cross-repo deps, **or** when a PR's CI would fail until a companion PR exists with a known URL (Draft = no CI fires; useful for parking a "second" PR while the "first" one's CI drives the bundle build — see "Draft as a CI deferral" below). Otherwise open as Ready.
 4. **Do not request reviewers at PR-open time.** Wait for CI to go green; revisit the reviewer list with the user after that.
 5. Empty-commit retrigger if needed (see "Re-triggering CI" below); flag any failing checks back to the user before assigning reviewers.
 
@@ -102,6 +116,21 @@ Anything other than a bare line beginning with `build-group=` at column 0 will b
 ### Recommended placement
 
 Put `build-group=` lines inside the `## Dependencies` section, separated from the prose bullets by a blank line, as shown in the example above. The parser doesn't care where in the body they are, but keeping them with the related prose dependency lists makes the body easy to scan.
+
+## Draft as a CI deferral
+
+**CI does not fire on Draft PRs by default.** This is useful beyond circular deps: when one PR's CI would fail until a companion PR exists with a known URL (e.g., a testref refresh that depends on an upstream behavior change), open the dependent PR as Draft *first*, get its URL, then open the upstream PR as Ready with `build-group=<draft PR url>`. The upstream's CI fires immediately and pulls in the draft's branch via the resolver. Only flip the dependent PR out of Draft *after* the upstream is green — exiting Draft fires CI on the dependent PR.
+
+Worked example for a 2-PR upstream/downstream pair where the downstream is a testref refresh (e.g., oops EAKF bug fix + soca testref companion):
+
+1. Create downstream PR (e.g., soca) **as Draft**. Body has `build-group=<upstream PR url placeholder>`. No CI runs.
+2. Create upstream PR (e.g., oops) **as Ready** with `build-group=<downstream PR url>` (URL now known from step 1). Upstream CI runs immediately, pulling the Draft downstream branch via the resolver.
+3. Edit downstream PR body to fill in the real upstream URL. Still Draft, still no CI.
+4. Wait for upstream CI to be green.
+5. Flip downstream out of Draft. Exiting Draft fires its CI; bundle includes the upstream branch via build-group → both green.
+6. Merge upstream first, downstream second. Remove stale `build-group=` lines as repos merge into develop (see "Merge sequence" below).
+
+The opt-in alternative `run-ci-on-draft=true` (see annotation table) makes CI run on Drafts; not used in this project — the deferral is the feature.
 
 ## Merge sequence — `build-group=` is dynamic
 

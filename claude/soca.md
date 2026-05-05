@@ -1,6 +1,6 @@
 # SOCA (Sea-ice, Ocean, and Coupled Assimilation)
 
-> Last updated against commit `3bf226dd` (2026-03-30). Run `cd bundle/soca && git log --oneline 3bf226dd..HEAD` to see what changed since.
+> Last updated against commit `2192651a` (2026-05-05). Run `cd bundle/soca && git log --oneline 2192651a..HEAD` to see what changed since.
 >
 > **Covers:** soca::Traits, soca::{Geometry,State,Increment,ModelOceanIceEmulator,LinearModelOceanIceEmulator,VariableChange}, ObsLocRossby, SABER SOCA blocks (BkgErrFilt, ParametricOceanStdDev, MLBalance), MOM6 restart format, Icepack sea-ice, KEmul/IceEmul ML emulators, opaque-handle Fortran pattern (F90geom/F90flds/F90iter/F90model/F90bmat).
 
@@ -26,6 +26,8 @@ Build/test quirks (FMS, GSL-lite, MOM6/Icepack externals, Torch/MLBalance) in `c
 | LocalInterpolator | `oops::UnstructuredInterpolator` |
 | ObsLocalization | `ufo::ObsLocalization<GeometryIterator>` |
 | ModelAuxControl | `soca::ModelBias` |
+| ModelAuxIncrement | `soca::ModelBiasIncrement` |
+| ModelAuxCovariance | `soca::ModelBiasCovariance` |
 | ModelData | `soca::ModelData` |
 
 ## Source Layout (`src/soca/`)
@@ -81,17 +83,17 @@ Two factory hierarchies:
 **Nonlinear** (`VariableChange/`):
 | Registered Name | Class | Purpose |
 |----------------|-------|---------|
-| `"Model2GeoVaLs"` | `Model2GeoVaLs` | Model → observation space |
+| `"Model2GeoVaLs"` (also `"default"`) | `Model2GeoVaLs` | Model → observation space; registered twice so it serves as the factory fallback |
 | `"Model2Ana"` | `Model2Ana` | Model → analysis variables |
 | `"Soca2Cice"` | `Soca2Cice` | SOCA → CICE format |
 
 VADER is used for generic transforms before falling back to soca-specific ones.
 
 **Linear (TL/AD)** (`LinearVariableChange/`):
-| Class | Purpose |
-|-------|---------|
-| `Balance` | Linearized balance equation (T/S → SSH coupling) |
-| `LinearModel2GeoVaLs` | TL/AD version of Model2GeoVaLs |
+| Registered Name | Class | Purpose |
+|-----------------|-------|---------|
+| `"BalanceSOCA"` | `Balance` | Linearized balance equation (T/S → SSH coupling) |
+| `"LinearModel2GeoVaLs"` (also `"default"`) | `LinearModel2GeoVaLs` | TL/AD version of Model2GeoVaLs; also the factory fallback |
 
 ### SABER Blocks
 
@@ -107,7 +109,7 @@ These are used in SABER outer block chains for ocean error covariance modeling.
 
 ### Obs Localization (`ObsLocalization/`)
 
-`ObsLocRossby` — custom localization registered as `"Rossby"`. Inherits from `ufo::ObsHorLocGC99<GeometryIterator>` and scales the Gaspari-Cohn localization radius by the local Rossby radius of deformation.
+`ObsLocRossby` — custom localization registered as `"Rossby"`. Inherits from `ufo::ObsHorLocGC99<GeometryIterator>` and adds `mult * rossby_radius` (read from the geometry iterator's `rossby_radius` field) to the configured Gaspari-Cohn lengthscale, so localization grows in low-latitude / deep-ocean regions.
 
 ## Fortran Interop
 

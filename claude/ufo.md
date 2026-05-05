@@ -1,6 +1,6 @@
 # UFO (Unified Forward Operators)
 
-> Last updated against commit `d829259d` (2026-04-29). Run `cd bundle/ufo && git log --oneline d829259d..HEAD` to see what changed since.
+> Last updated against commit `1eca4287` (2026-05-04). Run `cd bundle/ufo && git log --oneline 1eca4287..HEAD` to see what changed since.
 >
 > **Covers:** ObsOperator, LinearObsOperator, CompositeObsOperator, GeoVaLs, SampledLocations, ObsFilters, ObsBias, ObsDiagnostics, ObsError (Diagonal/CrossVarCov/BiasCorrelated/WithinGroup), ObsLocalization (Hor/HorGC99/HorSOAR/VertLocalization), QCflags, ObsFunctions, variable transforms, FilterBase, QCmanager, FinalCheck (see also `ufo-filter-lifecycle.md`), ObsTraits, CRTM/RTTOV integration.
 
@@ -87,7 +87,7 @@ obs operator:
 ### Filters (`src/ufo/filters/`)
 
 - General QC filters: `BackgroundCheck`, `BayesianBackgroundCheck`, `DifferenceCheck`, `Gaussian_Thinning`, `TrackCheck`, `MetOfficeBuddyCheck`, `HistoryCheck`, etc.
-- **`obsfunctions/`**: ~96 ObsFunction implementations. Categories: error models (ObsErrorBound*/ObsErrorFactor*/ObsErrorModel*), cloud detection (CLWRet*, CloudDetect*, CloudCostFunction), geometry (SolarZenith, TropopauseEstimate, ImpactHeight), wind (WindDirAngleDiff, SatWinds*), satellite (SymmCldImpactIR, NearSSTRetCheckIR), and general purpose (DrawValueFromFile, Conditional, DateTimeOffset).
+- **`obsfunctions/`**: ~98 ObsFunction implementations. Categories: error models (ObsErrorBound*/ObsErrorFactor*/ObsErrorModel*), cloud detection (CLWRet*, CloudDetect*, CloudCostFunction), geometry (SolarZenith, TropopauseEstimate, ImpactHeight), wind (WindDirAngleDiff, SatWinds*), satellite (SymmCldImpactIR, NearSSTRetCheckIR), time (TimeBinner), and general purpose (DrawValueFromFile, Conditional, DateTimeOffset, CircularDifference).
 - **`actions/`**: Filter actions (what to do when observations fail QC: `reject`, `assign value`, `inflate error`, etc.).
 - Specialized sub-filters: `gnssroonedvarcheck/`, `refractivityonedvarcheck/`, `rttovonedvarcheck/`.
 

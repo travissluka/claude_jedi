@@ -45,16 +45,24 @@ The scripts auto-detect the project root from their own location. Override with 
 ### Repo categories
 
 **Documented repos** (have `claude/<repo>.md`, analyzed in Phase 2):
-`oops ioda ufo saber vader fv3-jedi mpas-jedi pyiri-jedi jedi-docs`
+`oops ioda ufo saber vader fv3-jedi mpas-jedi pyiri-jedi soca coupling jedi-docs`
 
 **Undocumented source repos** (sync only, report activity):
-`soca coupling`
+_(none currently — every source repo in the bundle has a `claude/<repo>.md`)_
 
 **External repos** (sync only, do NOT analyze for doc updates):
 `gsw crtm mpas fv3-jedi-lm`
 
-**Data repos** (SKIP entirely — large, rarely relevant):
-`ioda-data ufo-data fv3-jedi-data mpas-jedi-data jedi-model-data test-data-release`
+**Paired data repos** (sync alongside their code repo, never analyzed for doc updates):
+- `ioda` → `ioda-data`
+- `ufo` → `ufo-data`
+- `fv3-jedi` → `fv3-jedi-data`
+- `mpas-jedi` → `mpas-jedi-data`
+
+When the code repo's `develop` is being pulled/merged in Phase 1, its paired data repo must be synced too — reference outputs are versioned with the code that produced them, and updating one without the other causes phantom test failures. If a code repo is *not* in this run's scope, leave its data repo alone.
+
+**Other data repos** (SKIP entirely — not tied to a single code repo):
+`jedi-model-data test-data-release`
 
 **Special doc**: `cross-repo-interactions.md` — update only when multiple repos have cross-cutting API changes.
 
@@ -73,13 +81,13 @@ Each `claude/<repo>.md` has on line 3:
 
 **Skip if `--no-pull` or `--docs-only` is set.**
 
-Call the sync script **once** with the full list of source repos (documented + undocumented + external, excluding data repos):
+Call the sync script **once** with the full list of source repos plus any paired data repos for code repos in scope:
 
 ```
-.claude/skills/update-repos/scripts/sync.sh oops ioda ufo saber vader fv3-jedi mpas-jedi pyiri-jedi jedi-docs soca coupling gsw crtm mpas fv3-jedi-lm
+.claude/skills/update-repos/scripts/sync.sh oops ioda ioda-data ufo ufo-data saber vader fv3-jedi fv3-jedi-data mpas-jedi mpas-jedi-data pyiri-jedi jedi-docs soca coupling gsw crtm mpas fv3-jedi-lm
 ```
 
-Filter the repo list to user-specified repos if any were passed.
+Filter the repo list to user-specified repos if any were passed. Whenever a code repo with a paired data repo (`ioda`, `ufo`, `fv3-jedi`, `mpas-jedi`) survives the filter, append its paired data repo to the sync list. If the user explicitly excludes a code repo, drop its data repo too — never sync a data repo on its own.
 
 The script emits TSV: `repo  branch  dirty  action  result  details`. Parse it into the sync-results table.
 
@@ -106,7 +114,7 @@ If you spot commits with messages like "Merge develop into feature/..." or a lar
 Call the analyze script **once** with the list of documented repos:
 
 ```
-.claude/skills/update-repos/scripts/analyze.sh oops ioda ufo saber vader fv3-jedi mpas-jedi pyiri-jedi jedi-docs
+.claude/skills/update-repos/scripts/analyze.sh oops ioda ufo saber vader fv3-jedi mpas-jedi pyiri-jedi soca coupling jedi-docs
 ```
 
 (Filter to user-specified repos if any were passed.)
@@ -157,13 +165,13 @@ A repo has **significant changes** if it has anything in the first 3 categories.
 
 ### Undocumented source repos
 
-For repos not in the documented list (e.g., `soca`, `coupling`), grab recent activity with a single call if relevant:
+If any source repo is in the "undocumented" list above, grab recent activity with a single call if relevant:
 
 ```
 git -C bundle/<repo> log --oneline -5
 ```
 
-Only bother if the Phase 1 table showed new commits for that repo.
+Only bother if the Phase 1 table showed new commits for that repo. (Currently every source repo has a doc, so this section is a no-op — it stays in case the bundle adds a new repo before its doc is written.)
 
 ### CLAUDE.md check
 
@@ -284,8 +292,7 @@ Cross-reference with `claude/active-projects.md`:
 - Note if feature branches absorbed new develop commits via merge
 
 ### Repos Without .claude Docs
-- soca: X new commits (brief summary)
-- coupling: X new commits (brief summary)
+_(omit section if every source repo is documented; otherwise list undocumented repos with new-commit summaries)_
 
 ### Action Items
 - [ ] Resolve merge conflict in <repo> (if any from Phase 1)

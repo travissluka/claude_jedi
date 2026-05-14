@@ -1,0 +1,53 @@
+# /etc/sudoers.d/hpc-emulator
+#
+# Passwordless sudo for the EXACT commands hpc-emulator setup/verify/teardown
+# invoke. Every entry is scoped to:
+#   - specific image paths (/dev/shm/hpc_emu*.img)
+#   - specific dm-delay device names (hpc_emu, hpc_emu_verify)
+#   - the loopback interface only (NOT eth0/wlan0/etc)
+#   - this user's mount points (/mnt/hpc_emu, /mnt/hpc_emu_verify)
+#
+# No general-purpose privilege escalation. A typo or shell-injection inside
+# any skill script can still only manipulate these specific resources.
+#
+# Install with:
+#   sudo install -m 0440 sudoers.example /etc/sudoers.d/hpc-emulator
+# (or use scripts/emulator_bootstrap.sh which substitutes __USER__ and installs
+# this file for you after one password prompt.)
+#
+# Replace __USER__ throughout with the developer's login. The bootstrap script
+# does this substitution automatically via sed.
+
+# ---- loop device manipulation: only our two image paths ----
+__USER__ ALL=(root) NOPASSWD: /usr/sbin/losetup -f --show /dev/shm/hpc_emu.img
+__USER__ ALL=(root) NOPASSWD: /usr/sbin/losetup -f --show /dev/shm/hpc_emu_verify.img
+__USER__ ALL=(root) NOPASSWD: /usr/sbin/losetup -d /dev/loop*
+__USER__ ALL=(root) NOPASSWD: /usr/sbin/blockdev --getsz /dev/loop*
+
+# ---- dm-delay devices: only the two names this skill uses ----
+__USER__ ALL=(root) NOPASSWD: /usr/sbin/dmsetup create hpc_emu
+__USER__ ALL=(root) NOPASSWD: /usr/sbin/dmsetup create hpc_emu_verify
+__USER__ ALL=(root) NOPASSWD: /usr/sbin/dmsetup remove hpc_emu
+__USER__ ALL=(root) NOPASSWD: /usr/sbin/dmsetup remove hpc_emu_verify
+__USER__ ALL=(root) NOPASSWD: /usr/sbin/dmsetup suspend hpc_emu
+__USER__ ALL=(root) NOPASSWD: /usr/sbin/dmsetup resume hpc_emu
+__USER__ ALL=(root) NOPASSWD: /usr/sbin/dmsetup reload hpc_emu
+__USER__ ALL=(root) NOPASSWD: /usr/sbin/dmsetup table hpc_emu
+
+# ---- ext4 formatting: only our two dm-mapper devices ----
+__USER__ ALL=(root) NOPASSWD: /usr/sbin/mkfs.ext4 -q -F /dev/mapper/hpc_emu
+__USER__ ALL=(root) NOPASSWD: /usr/sbin/mkfs.ext4 -q -F /dev/mapper/hpc_emu_verify
+
+# ---- mount points: only the two we own, mounting only our dm devices ----
+__USER__ ALL=(root) NOPASSWD: /usr/bin/mkdir -p /mnt/hpc_emu
+__USER__ ALL=(root) NOPASSWD: /usr/bin/mkdir -p /mnt/hpc_emu_verify
+__USER__ ALL=(root) NOPASSWD: /usr/bin/mount /dev/mapper/hpc_emu /mnt/hpc_emu
+__USER__ ALL=(root) NOPASSWD: /usr/bin/mount /dev/mapper/hpc_emu_verify /mnt/hpc_emu_verify
+__USER__ ALL=(root) NOPASSWD: /usr/bin/umount /mnt/hpc_emu
+__USER__ ALL=(root) NOPASSWD: /usr/bin/umount /mnt/hpc_emu_verify
+__USER__ ALL=(root) NOPASSWD: /usr/bin/chown __USER__ /mnt/hpc_emu
+__USER__ ALL=(root) NOPASSWD: /usr/bin/chown __USER__ /mnt/hpc_emu_verify
+
+# ---- traffic control: ONLY loopback, ONLY netem delay (no eth0/wlan0) ----
+__USER__ ALL=(root) NOPASSWD: /usr/sbin/tc qdisc add dev lo root handle 1\: netem delay * * distribution normal
+__USER__ ALL=(root) NOPASSWD: /usr/sbin/tc qdisc del dev lo root

@@ -1,6 +1,6 @@
 # FV3-JEDI
 
-> Last updated against commit `1ee24913` (2026-05-05). Run `cd bundle/fv3-jedi && git log --oneline 1ee24913..HEAD` to see what changed since.
+> Last updated against commit `1dcb7820` (2026-05-12). Run `cd bundle/fv3-jedi && git log --oneline 1dcb7820..HEAD` to see what changed since.
 >
 > **Covers:** fv3jedi::Traits, fv3jedi::{Geometry,State,Increment,Model,LinearModel,VariableChange,LinearVariableChange,ModelBias,ModelData}, FV3_FORECAST_MODEL backends (GEOS/UFS/FV3CORE), cubed-sphere geometry, LAM support, FV3LM linear model, GFS/GEOS I/O backends, FV3-JEDI/FMS interop, opaque-handle Fortran pattern, VertRemap (lapse-rate vertical remap after horizontal interpolation).
 

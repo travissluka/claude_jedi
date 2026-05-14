@@ -1,6 +1,6 @@
 # MPAS-JEDI
 
-> Last updated against commit `b0c24bde` (2026-05-05). Run `cd bundle/mpas-jedi && git log --oneline b0c24bde..HEAD` to see what changed since.
+> Last updated against commit `2ff1e632` (2026-05-14). Run `cd bundle/mpas-jedi && git log --oneline 2ff1e632..HEAD` to see what changed since.
 >
 > **Covers:** mpas::Traits, mpas::{Geometry,State,Increment,Model,LinearModel,VariableChange}, unstructured Voronoi mesh, MPAS 8.0 core_atmosphere integration, variable-resolution support, RTTOV/ROPP-UFO optional operators, opaque-handle Fortran pattern.
 

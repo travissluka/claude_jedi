@@ -6,6 +6,8 @@
 
 Canonical jedi-docs source: `bundle/jedi-docs/docs/working-practices/testing.rst` — section "Testing Development across Multiple Repositories". This file is a distilled local copy of the rules + a record of the project's preferred PR-authoring conventions.
 
+> **Squash-merge:** JCSDA-internal repos almost always squash-merge. `git merge-base --is-ancestor <branch> develop` is unreliable for detecting merged branches — the squashed commit has a different SHA so the feature-branch tip is never reachable from develop. Use `gh pr list --repo JCSDA-internal/<repo> --head <branch> --state merged` instead.
+
 ## Authoring workflow
 
 When preparing a PR for the author's review, follow this sequence:
@@ -22,7 +24,7 @@ When preparing a PR for the author's review, follow this sequence:
      gh pr list --repo JCSDA-internal/<repo> --state merged --limit 5 --json number,title,url
      gh pr view <number> --repo JCSDA-internal/<repo>
      ```
-   - Check feedback memory for PR-related entries (`feedback_pr_*`, `feedback_cross_repo_pr_refs`, `feedback_pr_strikethrough_stale_buildgroup`, `feedback_pr_authoring_workflow`, `feedback_pr_issue_bullet_style`, `feedback_pr_build_group_syntax`).
+   - Check feedback memory for any PR workflow preferences (`feedback_pr_authoring_workflow`) — most other PR rules now live in this file directly.
 
 1. **Draft the full PR text** (title + body following the template structure below) and surface it in chat for review *before* calling `gh pr create`. Do not open the PR until the user has approved the wording.
 2. Along with the body, propose:
@@ -184,5 +186,6 @@ Only `bug` is actively curated — apply it when the PR fixes incorrect behavior
 ## Other PR-body conventions
 
 - **Don't hard-wrap markdown prose** — one paragraph = one line. PR rendering handles the wrap; manual newlines break inline links and code spans.
-- The Issue(s) addressed section uses `Resolves #<n>` — this auto-closes the issue on merge. `Refs #<n>` for related-but-not-resolving issues.
+- The Issue(s) addressed section uses markdown bullets, not bare lines (renders consistently with `## Dependencies` bullets). `Resolves #<n>` auto-closes the issue on merge. For non-closing PRs in a coordinated set, use a bare bullet ref with no keyword (don't write `Refs` everywhere — only `Resolves` on the closing PR is structurally meaningful to GitHub).
+- **Tracking issues live in the closing repo.** For a multi-repo PR set, open the umbrella tracking issue in the same repo as `closing_repo` (highest `merge_order`). Only the closing PR carries `Closes #N`, and GitHub's auto-close fires only when the issue and the closing PR are in the same repo. Putting the issue in the most-upstream repo forces a manual close after merge.
 - The Checklist boxes are self-attestation; tick them when the assertion is true.

@@ -1,6 +1,6 @@
 # Build & Test (per-repo quirks)
 
-> **Covers:** build dependency DAG (find_package + subdir target_link_libraries), per-repo unique CMake flags (ENABLE_*/FV3_FORECAST_MODEL/IODA_BUILD_LANGUAGE_FORTRAN/...), repo-unique optional dependencies (FFTW, ECTRANS, gsibec, GSW, PyTorch, FMS, MOM6, MPAS 8.0, PyIRI, CFFI, CRTM), test-naming conventions (`ufo_test_tier1_*`, `vader_recipe_*`, MPI 6 coupling tests).
+> **Covers:** build dependency DAG (find_package + subdir target_link_libraries), per-repo unique CMake flags (ENABLE_*/FV3_FORECAST_MODEL/IODA_BUILD_LANGUAGE_FORTRAN/...), repo-unique optional dependencies (FFTW, ECTRANS, gsibec, GSW, PyTorch, FMS, MOM6, MPAS 8.0, PyIRI, CFFI, CRTM), test-naming conventions (`ufo_test_tier1_*`, `vader_recipe_*`, MPI 6 coupling tests), bundle-level quirks (`BRANCH ... UPDATE` force-reset, per-repo rebuild scope), and ctest env-var gotchas (`VALIDATE_PARAMETERS`).
 
 Common build commands, test invocations, and shared dependencies are in `CLAUDE.md`. This file only lists what's *unique* per repo — flags that toggle features, external dependencies beyond the common set, and test naming quirks.
 
@@ -112,3 +112,47 @@ If this section gets out of sync with CMake, refresh it as part of `/update-repo
 | **fv3-jedi** | ~100+ YAML configs; test CMakeLists.txt ~2700 lines. |
 | **soca** | 95+ YAMLs, 14 test executables, grid sizes 36×17×25 and 72×35×25 in `test/Data/`. |
 | **coupling** | 11 test targets, all using `MPI 6`. Test data symlinked from soca and fv3-jedi. |
+
+## Bundle quirks
+
+### `BRANCH develop UPDATE` force-resets feature branches on every cmake
+
+`bundle/CMakeLists.txt` calls `ecbuild_bundle` with `BRANCH develop UPDATE` for most subrepos. The `UPDATE` keyword makes cmake actively checkout+fast-forward that branch on every reconfigure. If you're working on a feature branch in a subrepo, *any* cmake run will silently switch the subrepo back to `develop`. Uncommitted work in the working tree is preserved, but future commits land on the wrong branch.
+
+Before running cmake while on a feature branch, comment out the `BRANCH develop UPDATE` clause for that subrepo. Pattern (lines 75, 85, 89, 103, 118 already follow this):
+
+```cmake
+ecbuild_bundle( PROJECT <name> GIT "..." ) #BRANCH develop UPDATE )
+```
+
+Close the paren before `BRANCH`, then `#` out the trailing tokens. Restore the clause before bundle-level merges (otherwise downstream users won't auto-pull develop). The pattern of already-commented repos suggests the convention is "comment while actively developing, uncomment before release."
+
+`jedi-docs` is not managed by `ecbuild_bundle`, so it is never auto-switched.
+
+### Per-repo rebuild: scope matters
+
+`cd build/<repo> && make -j` rebuilds the library, all tests, and all executables in that repo's subgraph.
+
+`make -j <repo>` from the top-level `build/` rebuilds **only the library**. Test binaries and executables (e.g. `soca_letkf.x`) keep their old timestamps and silently link against the previous object files for any templates instantiated in the executable's translation units — meaning your log lines, new methods, or behavioral changes won't appear when you re-run.
+
+Whenever a code change matters at runtime (added an `oops::Log::info()`, changed a virtual, added a template specialization), use the `cd build/<repo>` form.
+
+## ctest env-var gotchas
+
+### `VALIDATE_PARAMETERS` bleeds into model-interface tests
+
+YAML schema validation is maintained only for the core repos (`oops`, `ioda`, `saber`, `ufo`). Model-interface repos (`fv3-jedi`, `soca`, `mpas-jedi`, `pyiri-jedi`, `coupling`) do not keep validator-clean schemas — e.g. ioda's `RoundRobin` distribution gets `center`/`radius` injected at runtime by obs-localization patches, which the schema rejects with "additional properties are not allowed".
+
+`oops`/`ufo` CMakeLists set `VALIDATE_PARAMETERS=1` per-test; the model-interface repos don't clear it. If your shell exports `VALIDATE_PARAMETERS=1` (common when working in oops/ufo), it inherits into ctest and breaks model-interface tests with false-positive validation failures.
+
+For any ctest invocation that touches model-interface tests (the sequential-EnKF subset, full bundle ctests, or single-repo runs in fv3-jedi/soca/mpas-jedi/pyiri-jedi/coupling), wrap with:
+
+```bash
+env -u VALIDATE_PARAMETERS ctest --output-on-failure -R <pat>
+```
+
+A "YAML validation failed" / "additional properties are not allowed" exception in a model-interface test is almost always inherited `VALIDATE_PARAMETERS=1`, not a real regression.
+
+## Squash-merge consequences for branch-ancestry checks
+
+JCSDA-internal repos almost always squash-merge PRs. The squashed commit on `develop` has a different SHA than the feature-branch tip, so `git merge-base --is-ancestor <branch> develop` will say "no" even for branches that have been merged. To detect whether a feature branch has actually merged, query GitHub: `gh pr list --repo JCSDA-internal/<repo> --head <branch> --state merged`.

@@ -63,9 +63,9 @@ Build is a DAG, not a chain — model-interface repos (fv3-jedi, soca, mpas-jedi
 | File | Purpose |
 |------|---------|
 | **Per-repo** | |
-| `oops.md` | source layout, FieldSet3D/IncrementSet/GeometryData, 17 minimizers, 5 cost functions, 4 LETKF solvers |
+| `oops.md` | source layout, FieldSet3D/IncrementSet/GeometryData, 17 minimizers, 5 cost functions, 5 local ensemble solvers (LETKF/GETKF Det/GETKF Stoch/SequentialEnsembleSolver/EAKF), generic `Diffusion` |
 | `ioda.md` | two-layer engine design, storage backends, OSDF containers |
-| `ufo.md` | operators (incl. composite), filters, ~96 obsfunctions, ~32 variable transforms, 4 R-matrix types, obs localization |
+| `ufo.md` | operators (incl. composite), filters, ~100 obsfunctions, ~32 variable transforms, 5 R-matrix types, obs localization |
 | `saber.md` | block/chain architecture, multiply order, QUENCH testbed, all block YAML names, BUMP, calibration, ErrorCovarianceToolbox |
 | `vader.md` | recipe/cookbook pattern, planning algorithm, adding recipes |
 | `fv3-jedi.md` | FV3/GEOS/GFS/UFS interface, cubed-sphere geometry, I/O backends, TLM |
@@ -83,9 +83,9 @@ Build is a DAG, not a chain — model-interface repos (fv3-jedi, soca, mpas-jedi
 | `testing-patterns.md` | `ecbuild_add_test`, reference outputs, tier system, adjoint tests |
 | `ufo-filter-lifecycle.md` | filter stages (PRE/PRIOR/POST), where clause, actions, ObsFunctions |
 | `mpi-patterns.md` | commTime/commEns splitting, ensemble distribution, GetValues allToAll |
-| `build-and-test.md` | per-repo unique build flags, optional deps, test-naming quirks |
+| `build-and-test.md` | per-repo unique build flags, optional deps, test-naming quirks, bundle quirks (`BRANCH develop UPDATE` force-reset, per-repo rebuild scope), ctest env-var gotchas (`VALIDATE_PARAMETERS`), squash-merge ancestry pitfalls |
 | `maintainers.md` | per-repo GitHub handles for ping/escalation on stalled PRs (sourced from `JCSDA-internal/github-admin` terraform) |
-| `pr-conventions.md` | **READ FIRST when authoring any PR.** Template structure (section headings + literal checklist), authoring workflow (gather context → draft → user review → open → assign reviewers after CI green), Dependencies section format, `build-group=` / `run-ci-on-draft=` annotation syntax, CI re-trigger, common mistakes |
+| `pr-conventions.md` | **READ FIRST when authoring any PR.** Template structure (section headings + literal checklist), authoring workflow (gather context → draft → user review → open → assign reviewers after CI green), Dependencies section format, `build-group=` / `run-ci-on-draft=` annotation syntax, CI re-trigger, squash-merge ancestry implications, tracking-issue-lives-in-closing-repo, Resolves/bullet conventions, common mistakes |
 | `INDEX.md` | keyword/symbol → file/section index |
 
 ### Keeping docs current

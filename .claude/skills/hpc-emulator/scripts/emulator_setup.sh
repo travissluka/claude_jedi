@@ -70,14 +70,16 @@ else
   echo "[setup] verify cache hit ($CACHE_FILE) — skipping verify"
 fi
 
-# ------------------------------------------------------------ tmpfs sanity
-case "$IMG" in
-  /dev/shm/*|/tmp/*) ;;  # /tmp is tmpfs on most distros; /dev/shm always is
-  *)
-    echo "[setup] WARNING: HPC_EMU_IMG=$IMG is not on tmpfs." >&2
-    echo "         Writeback artifacts will dominate timings — see SKILL.md gotcha #1." >&2
-    ;;
-esac
+# ------------------------------------------------------------ path gate
+# sudoers.example only permits the default IMG and MNT paths — any override
+# will silently hang on a password prompt. Reject up front instead.
+if [ "$IMG" != "/dev/shm/hpc_emu.img" ] || [ "$MNT" != "/mnt/hpc_emu" ]; then
+  echo "[setup] HPC_EMU_IMG / HPC_EMU_MNT overrides aren't permitted by the default sudoers." >&2
+  echo "         You set:   IMG=$IMG  MNT=$MNT" >&2
+  echo "         Allowed:   IMG=/dev/shm/hpc_emu.img  MNT=/mnt/hpc_emu" >&2
+  echo "         Either unset the overrides, or edit /etc/sudoers.d/hpc-emulator." >&2
+  exit 1
+fi
 
 # ------------------------------------------------------------ cleanup prior
 echo "=== cleanup any prior hpc-emulator state ==="

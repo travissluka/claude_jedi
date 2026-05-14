@@ -55,7 +55,7 @@ Don't fire when:
 
 ## Setup / verify / teardown
 
-All scripts are in `<skill_dir>/scripts/`.
+All scripts are in `<skill_dir>/scripts/`. Verify builds a tiny MPI pingpong via `make pingpong`, so `mpicc` must be in `PATH` (e.g. via the project's env script).
 
 **First use on a new machine — user-driven, in a real terminal window.**
 
@@ -69,15 +69,9 @@ The bootstrap is interactive — it displays the rendered sudoers fragment (with
 
 **Repeat use (NOPASSWD already wired).** Just:
 ```bash
-<skill_dir>/scripts/emulator_setup.sh    # auto-runs emulator_verify.sh first if no cache, caches result
-```
-The verify step takes ~30 s and proves each of the three layers measurably exists on this kernel. After it passes, the cache file at `~/.cache/hpc-emulator/verified-<host>-<kernel>` lets subsequent setups skip verify.
-
-**Repeat use.** Just:
-```bash
 <skill_dir>/scripts/emulator_setup.sh
 ```
-Cache hit → straight to setup.
+On first use on a given host+kernel, setup auto-runs `emulator_verify.sh` (~30 s) to prove each of the three layers measurably exists, then caches the pass at `~/.cache/hpc-emulator/verified-<host>-<kernel>`. Subsequent setups skip verify.
 
 **Tear down.** When done benchmarking:
 ```bash
@@ -97,9 +91,9 @@ All of these have defaults that match what's known to work. Override only when y
 
 | Env var | Default | What it controls |
 |---|---|---|
-| `HPC_EMU_IMG` | `/dev/shm/hpc_emu.img` | Backing file for the loop device (**must be tmpfs**) |
+| `HPC_EMU_IMG` | `/dev/shm/hpc_emu.img` | Backing file for the loop device (**must be tmpfs**; overrides require editing `/etc/sudoers.d/hpc-emulator` to match) |
 | `HPC_EMU_IMG_GB` | `25` | Sparse size of the loop image |
-| `HPC_EMU_MNT` | `/mnt/hpc_emu` | Mount point for the slow filesystem |
+| `HPC_EMU_MNT` | `/mnt/hpc_emu` | Mount point for the slow filesystem (overrides require sudoers edit) |
 | `HPC_EMU_READ_MS` | `3` | dm-delay read latency (ms) |
 | `HPC_EMU_WRITE_MS` | `5` | dm-delay write latency (ms) |
 | `HPC_EMU_NETEM_DELAY` | `10us` | Fabric latency added to loopback |

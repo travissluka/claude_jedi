@@ -1,6 +1,6 @@
 # MPAS-JEDI
 
-> Last updated against commit `2ff1e632` (2026-05-14). Run `cd bundle/mpas-jedi && git log --oneline 2ff1e632..HEAD` to see what changed since.
+> Last updated against commit `59fc6e6b` (2026-05-18). Run `cd bundle/mpas-jedi && git log --oneline 59fc6e6b..HEAD` to see what changed since.
 >
 > **Covers:** mpas::Traits, mpas::{Geometry,State,Increment,Model,LinearModel,VariableChange}, unstructured Voronoi mesh, MPAS 8.0 core_atmosphere integration, variable-resolution support, RTTOV/ROPP-UFO optional operators, opaque-handle Fortran pattern.
 
@@ -36,6 +36,8 @@ Wraps MPAS mesh in ATLAS `NodeColumns` function space. Reads MPAS namelist/strea
 
 ### State / Increment (`State/`, `Increment/`)
 State holds prognostic variables via Fortran `mpas_fields` type. Converts to/from ATLAS FieldSet for SABER/UFO interaction. Increment provides full linear algebra (`axpy`, `dot_product_with`, `schur_product_with`, `dirac`), serialization, and `getLocal`/`setLocal` for localization.
+
+`State::add_incr` optionally refreshes the diagnostic 2 m temperature and 2 m water-vapor mixing ratio from the lowest model level after each outer-loop update — gated by Geometry YAML key `update 2mTQ between outer loops` (default `false`; mpas-jedi #1174). Enable when downstream H(x) consumes the 2 m fields and outer loops are large enough that the lowest model level drifts significantly from the post-add state.
 
 ### Fields (`Fields/`)
 Fortran `mpas_fields` type: wraps MPAS pool of fields with array operations (`axpy`, `dot_prod`, `gpnorm`, `rms`). Handles I/O via MPAS stream manager.

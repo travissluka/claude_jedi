@@ -1,6 +1,6 @@
 # UFO (Unified Forward Operators)
 
-> Last updated against commit `4cb7478c` (2026-05-14). Run `cd bundle/ufo && git log --oneline 4cb7478c..HEAD` to see what changed since.
+> Last updated against commit `90979fa0` (2026-05-20). Run `cd bundle/ufo && git log --oneline 90979fa0..HEAD` to see what changed since.
 >
 > **Covers:** ObsOperator, LinearObsOperator, CompositeObsOperator, GeoVaLs, SampledLocations, ObsFilters, ObsBias, ObsDiagnostics, ObsError (Diagonal/CrossVarCov/BiasCorrelated/WithinGroup), ObsLocalization (Hor/HorGC99/HorSOAR/VertLocalization), QCflags, ObsFunctions, variable transforms, FilterBase, QCmanager, FinalCheck (see also `ufo-filter-lifecycle.md`), ObsTraits, CRTM/RTTOV integration.
 
@@ -86,7 +86,7 @@ obs operator:
 
 ### Filters (`src/ufo/filters/`)
 
-- General QC filters: `BackgroundCheck`, `BayesianBackgroundCheck`, `DifferenceCheck`, `Gaussian_Thinning`, `TrackCheck`, `MetOfficeBuddyCheck`, `HistoryCheck`, `EnsembleStatistics` (writes per-obs ensemble statistics to ObsSpace; added `IGObsStdDev` statistic in PR #4024 — writes effective inverse-gamma observation std dev to the `IGObsError` group via a new `relative variance` YAML param, paired with `ObsErrorDiagonalInvGamma`), etc.
+- General QC filters: `BackgroundCheck`, `BayesianBackgroundCheck`, `DifferenceCheck`, `Gaussian_Thinning`, `DuplicateThinning` (flags duplicates within configurable tolerances on a user-specified set of `variable names`; optional `analysis_time` + `analysis_time_tolerance` keep obs near the analysis time, with a `min_spacing` (default PT1H) temporal thinning pass and `equidistant_time_selection` (`after`/`before`) tie-breaker — PR #4086), `TrackCheck`, `MetOfficeBuddyCheck`, `HistoryCheck`, `EnsembleStatistics` (writes per-obs ensemble statistics to ObsSpace; added `IGObsStdDev` statistic in PR #4024 — writes effective inverse-gamma observation std dev to the `IGObsError` group via a new `relative variance` YAML param, paired with `ObsErrorDiagonalInvGamma`), etc.
 - **`obsfunctions/`**: ~100 ObsFunction implementations. Categories: error models (ObsErrorBound*/ObsErrorFactor*/ObsErrorModel*), cloud detection (CLWRet*, CloudDetect*, CloudCostFunction), geometry (SolarZenith, TropopauseEstimate, ImpactHeight), wind (WindDirAngleDiff, SatWinds*), satellite (SymmCldImpactIR, NearSSTRetCheckIR), time (TimeBinner), and general purpose (DrawValueFromFile, Conditional, DateTimeOffset, CircularDifference, `Statistic` — MPI-global statistic across all ranks: arithmetic/harmonic/weighted mean, median, mode, stddev, variance, assigning the same global value to every location; typically paired with `Variable Assignment` plus a `where` clause — PR #4091, `ProfileVerticalSmoothing` — per-profile local polynomial regression with height-dependent filter widths and configurable polynomial order — PR #4032).
 - **`actions/`**: Filter actions (what to do when observations fail QC: `reject`, `assign value`, `inflate error`, etc.).
 - Specialized sub-filters: `gnssroonedvarcheck/`, `refractivityonedvarcheck/`, `rttovonedvarcheck/`.

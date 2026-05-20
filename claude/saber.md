@@ -1,6 +1,6 @@
 # SABER (System for Atmospheric and Boundary Layer Error Representation)
 
-> Last updated against commit `8571579e` (2026-04-23). Run `cd bundle/saber && git log --oneline 8571579e..HEAD` to see what changed since.
+> Last updated against commit `d05c06fc` (2026-05-18). Run `cd bundle/saber && git log --oneline d05c06fc..HEAD` to see what changed since.
 >
 > **Covers:** SaberCentralBlockBase, SaberOuterBlockBase, SaberParametricBlockChain, SaberEnsembleBlockChain, SaberHybridBlockChain, SaberOuterBlockChain, BUMP_NICAS, Diffusion/DiffusionImpl/DiffusionFilter, FastLAM, Bifourier, SpectralCovariance/Correlation/AnalyticalCorrelation, StdDev, VertLoc, DuplicateVariables, ID, GaussToCS, VaderBlock, TorchBalance, GSIBlockChain, QUENCH testbed, ErrorCovariance<MODEL>, ErrorCovarianceToolbox, ProcessPerts, Localization, multiply/multiplyAD/leftInverseMultiply/multiplySqrt, direct/iterative calibration, dirac tests, CoupledErrorCovariance.
 
@@ -190,9 +190,17 @@ Transform backends: `BifourierTransformFFTW`, `BifourierTransformECTRANS`.
 
 Main block: `FastLAM` (59KB impl). Layer types: `LayerSpec` (spectral), `LayerHalo`, `LayerRC` (regional covariance). Supports iterative calibration.
 
-### `diffusion/` — Explicit diffusion localization (C++ only)
+### `diffusion/` — Diffusion localization, explicit + implicit vertical (C++ only)
 
 `Diffusion` block (28KB impl). Better than NICAS for small correlation length-scales. Direct calibration from ensemble. Filter mode support. Implementation split: `DiffusionImpl` handles the core diffusion math, `Diffusion` wraps it as a central block. `DiffusionFilter` wraps it as a `SaberOuterBlockChain`-based filter.
+
+**Vertical scheme selection** (saber #1234, paired with oops #3275): the YAML `vertical:` block selects between the default explicit scheme and an implicit Mirouze–Weaver scheme:
+```yaml
+vertical:
+  method: explicit | implicit   # default explicit
+  iterations: 4                  # implicit only; must be a positive even integer
+```
+`DiffusionImpl::configureDiffusion()` parses this and forwards to `oops::Diffusion::setParameters(..., VerticalMethod::Implicit, N)`. The input length scale is interpreted as the Daley length scale of the output kernel for both schemes; the optional GC-half-width → Daley conversion (1/3.67, `as gaussian: false`) is applied beforehand.
 
 ### `spectralb/` — Spectral balance for global models (requires atlas TRANS or ECTRANS)
 
@@ -212,11 +220,11 @@ Main block: `FastLAM` (59KB impl). Layer types: `LayerSpec` (spectral), `LayerHa
 
 ### `gsi/` — GSI (Gridpoint Statistical Interpolation) covariance
 
-`GSIBlockChain` wraps GSI Fortran backend via linked-list pattern. Requires `gsibec` library.
+`GSIBlockChain` wraps GSI Fortran backend via linked-list pattern. Requires `gsibec` library. Supports regional fv3-jedi and mpas-jedi analyses via the `regional mode: true` YAML flag (`GSIParameters.h`); the regional path uses 2D `lats2`/`lons2` arrays in `gsi_grid_mod.f90` for non-separable grids. Field-name resolver in `gsi_covariance_mod.f90` maps `prsl ↔ air_pressure` alongside the existing `ts ↔ sst` mapping.
 
 ### `interpolation/` — Grid interpolation blocks
 
-`Interpolation`, `GaussToCS` (Gaussian→cubed-sphere), `Rescaling`, `VertProj` (vertical projection). Uses ATLAS interpolation wrappers.
+`Interpolation`, `GaussToCS` (Gaussian→cubed-sphere), `Rescaling`, `VertProj` (vertical projection). Uses ATLAS interpolation wrappers. `setupGsiMatchingGrid` (`Geometry.cc`) accepts `type: rotated_lonlat` (alongside `gaussian` and `latlon`); requires `lat_start`/`lat_end`/`lon_start`/`lon_end`/`north_pole_lat`/`north_pole_lon` YAML keys and builds an ATLAS `StructuredGrid` with a rotated-lonlat projection — used to wire regional fv3/mpas analyses to GSIbec.
 
 ### `coupled/` — Block-diagonal coupled covariance (C++ only)
 

@@ -1,6 +1,6 @@
 # IODA (JEDI Interface for Observation Data Access)
 
-> Last updated against commit `7d7e782f` (2026-05-12). Run `cd bundle/ioda && git log --oneline 7d7e782f..HEAD` to see what changed since.
+> Last updated against commit `1d390ad1` (2026-05-20). Run `cd bundle/ioda && git log --oneline 1d390ad1..HEAD` to see what changed since.
 >
 > **Covers:** ObsSpace, ObsVector, ObsDataVector, Distribution (RoundRobin/Halo/Inefficient), ObsIterator, DistributionUtils (dot_product, missing-value handling), ioda_engines two-layer design, ObsGroup, ObsStore, HDF5/in-memory/ODB/BUFR backends, OSDF containers, Fortran/Python bindings.
 
@@ -35,7 +35,7 @@ Storage backends (engines):
 Reader/Writer factory pattern: `ReaderBase`/`WriterBase` with `ReaderFactory`/`WriterFactory` for engine selection at runtime.
 
 **`ioda`** (`src/`) — Higher-level JEDI/oops interface:
-- `ioda::ObsSpace` — main class; extends `oops::ObsSpaceBase`; manages the full lifecycle of obs data in a DA run (read on construction, optional write on destruction). Exposes `begin()`/`end()` returning `ioda::ObsIterator` for location-based traversal.
+- `ioda::ObsSpace` — main class; extends `oops::ObsSpaceBase`; manages the full lifecycle of obs data in a DA run (read on construction, optional write on destruction). Exposes `begin()`/`end()` returning `ioda::ObsIterator` for location-based traversal. Supports continuous/cycling DA via `updateObsSpace(cdaConfig)`: shifts the time window forward, appends a new obs directory, and drops obs falling outside the shifted window via `reduce()`. Attached `ObsSpaceAssociated` consumers (`ObsVector`, `ObsDataVector<T>`) stay in sync through `attach()` plus the `reduce()`/`append()`/`syncAppend()` virtuals.
 - `ioda::ObsIterator` — forward iterator over obs locations; dereferences to `eckit::geometry::Point3(lon, lat, 0)`. Aliased as `IodaTrait::GeometryIterator`.
 - `ioda::ObsVector` — observation vector for DA algorithms
 - `ioda::ObsDataVector<T>` — templated obs data container
@@ -100,7 +100,7 @@ The `osdf` namespace (`src/containers/`) provides column- and row-oriented data 
 
 **Column metadata with units**: Each OSDF column carries metadata via `osdf::ColumnMetadatum`, which stores the column name, data type, permission, and **units** (string). Units are accessed via `getUnit()`/`setUnit()` on `ColumnMetadatum`, or via `IFrame::getColumnUnits(columnName)`.
 
-**OSDF writer** (`src/writer/`): The write pipeline has two stages: `collectObs()` (`collect/collectObs.hpp`) gathers observations from all ranks onto designated I/O pool ranks, then `obsWrite()` (`ObsWriter.hpp`) handles the full output pipeline (accepts output parameters, MPI communicator, distribution info, source OSDF frame, statistics, and metadata). Under the hood, `saveObs()` (`save/`) delegates to `saveOsdfToNetcdf()` which writes directly to NetCDF (using netcdf-cxx4, not the HDF5/HH engine). The writer handles Location and Channel dimensions, creates hierarchical group/variable structures matching IODA conventions, sets `_FillValue` and `units` attributes, and supports multi-file output (one file per I/O pool rank).
+**OSDF writer** (`src/writer/`): The write pipeline has two stages: `collectObs()` (`collect/collectObs.hpp`) gathers observations from all ranks onto designated I/O pool ranks, then `obsWrite()` (`ObsWriter.hpp`) handles the full output pipeline (accepts output parameters, MPI communicator, distribution info, source OSDF frame, statistics, and metadata). Under the hood, `saveObs()` (`save/`) delegates to `saveOsdfToNetcdf()` which writes directly to NetCDF (using netcdf-cxx4, not the HDF5/HH engine). The writer handles Location and Channel dimensions, creates hierarchical group/variable structures matching IODA conventions, sets `_FillValue` and `units` attributes, and supports multi-file output (one file per I/O pool rank). Also handles **empty ObsSpace output**: when no obs survive filtering, `saveOsdfToNetcdf()` still writes a NetCDF file with `Location` dimension of size 0 (recognized on read to reconstruct an empty ObsSpace), so OSDF-only workflows can run without the legacy HDF5 engine fallback.
 
 ## Test Data
 

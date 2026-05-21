@@ -1,8 +1,8 @@
 # SOCA (Sea-ice, Ocean, and Coupled Assimilation)
 
-> Last updated against commit `4f3979af` (2026-05-12). Run `cd bundle/soca && git log --oneline 4f3979af..HEAD` to see what changed since.
+> Last updated against commit `4b0c6a80` (2026-05-21). Run `cd bundle/soca && git log --oneline 4b0c6a80..HEAD` to see what changed since.
 >
-> **Covers:** soca::Traits, soca::{Geometry,State,Increment,ModelOceanIceEmulator,LinearModelOceanIceEmulator,VariableChange}, ObsLocRossby, SABER SOCA blocks (BkgErrFilt, ParametricOceanStdDev, MLBalance), MOM6 restart format, Icepack sea-ice, KEmul/IceEmul ML emulators, opaque-handle Fortran pattern (F90geom/F90flds/F90iter/F90model/F90bmat).
+> **Covers:** soca::Traits, soca::{Geometry,State,Increment,ModelOceanIceEmulator,LinearModelOceanIceEmulator,VariableChange}, ObsLocRossby, SABER SOCA blocks (BkgErrFilt, ParametricOceanStdDev, MLBalance), MOM6 restart format, Icepack sea-ice, KEmul/IceEmul ML emulators, opaque-handle Fortran pattern (F90geom/F90flds/F90iter/F90model/F90bmat), `soca_io_mod` direct-netCDF reader/writer.
 
 ## Overview
 
@@ -35,6 +35,7 @@ Build/test quirks (FMS, GSL-lite, MOM6/Icepack externals, Torch/MLBalance) in `c
 | Directory | Purpose |
 |-----------|---------|
 | `Geometry/` | Ocean grid (ATLAS NodeColumns), FMS config, vertical coords |
+| `IO/` | Direct-netCDF reader/writer (`soca_io_mod`); replaces FMS `fms_io_mod`; used by Fields, Geometry, Balance |
 | `GeometryIterator/` | 3D grid point iterator (lon, lat, depth) for obs localization |
 | `State/` | Full model state (extends Fields) |
 | `Increment/` | Perturbation/analysis increment (extends Fields) |
@@ -58,7 +59,7 @@ Build/test quirks (FMS, GSL-lite, MOM6/Icepack externals, Torch/MLBalance) in `c
 
 Manages the 3D ocean grid using ATLAS `NodeColumns` function space on a curvilinear Arakawa C-grid (from MOM6). Key aspects:
 
-- **FMS integration**: `FmsInput` manages MOM6 `input.nml` namelist configuration
+- **FMS integration**: `FmsInput` manages MOM6 `input.nml` namelist configuration. Only `fms_init`/`fms_end` and `mpp_*` domain decomposition remain; `fms_io_init`/`fms_io_exit` and the `global_soca_geom_counter` shim were removed when `fms_io_mod` was replaced. Geometry restart (`soca_gridspec.nc`) now reads/writes through `soca_io_reader/writer`.
 - **Vertical**: Z-coordinate levels, top-down (`levelsAreTopDown() = true`)
 - **Staggered grids**: `tohgrid()` / `tocgrid()` for H-grid ↔ C-grid transforms
 - **Iterator**: `GeometryIterator` provides 2D or 3D iteration (configurable via `IteratorDimension`)
@@ -68,7 +69,7 @@ Manages the 3D ocean grid using ATLAS `NodeColumns` function space on a curvilin
 
 `Fields` is the common base class wrapping `atlas::FieldSet`. State and Increment extend it:
 
-- **State**: read/write via FMS/NetCDF backend, `rotate2north`/`rotate2grid` for wind rotation, `logtrans`/`expontrans` for log-space variables
+- **State**: read/write via `soca_io_mod` (direct netCDF; PE 0 `nf90_*` + `mpp_broadcast`/`mpp_gather`); FMS `register_restart_field` path removed. `rotate2north`/`rotate2grid` for wind rotation, `logtrans`/`expontrans` for log-space variables
 - **Increment**: linear algebra (`axpy`, `dot_product_with`, `schur_product_with`), `getLocal`/`setLocal` via GeometryIterator, `diff` between states, `rmsByLevel`
 - **Serialization**: both support serialize/deserialize for MPI communication
 
@@ -127,7 +128,7 @@ C++ ↔ Fortran bridge via `*.interface.F90` files. ATLAS FieldSet provides shar
 
 ## I/O
 
-State/Increment read and write through FMS/NetCDF via Fortran modules (`soca_state_mod`, `soca_increment_mod`). MOM6 restart format used for state files. The `readNcAndInterp.h` utility provides generic NetCDF interpolation. The `MLBalance/KEmul/IceEmul` module uses direct NetCDF C API calls.
+State, Geometry, and Balance restarts read/write through `soca_io_mod` (`src/soca/IO/`) — a register-then-commit API: `soca_io_reader%init(filename)` → repeated `enqueue(varname, target_ptr)` → `commit()` (and the symmetric `soca_io_writer`). Implementation opens/closes the netCDF file each commit (no handle cache — keeps LETKF memory bounded) and currently fans out via PE 0 `nf90_get_var` + `mpp_broadcast` / collects via `mpp_gather` on writes. Helpers: `soca_io_file_exists`, `soca_io_var_exists`. The writer holds raw pointers into caller buffers, so callers must keep those buffers alive (and declare them `target`) until `commit()`. `soca_genfilename` now appends `.nc` explicitly (previously implicit via FMS) — existing test/YAML names already include the suffix, so this is correctness-restoring, not a breaking change. No new YAML keys. Motivation: unblock per-PE ensemble I/O (PE i reads member i alone) that FMS's collective `fms_io_mod` semantics made impossible. MOM6 restart format is still used for state files. `readNcAndInterp.h` provides generic NetCDF interpolation; `MLBalance/KEmul/IceEmul` uses direct NetCDF C API calls.
 
 ## Ocean Variables
 

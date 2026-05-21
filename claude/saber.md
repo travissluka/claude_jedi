@@ -1,6 +1,6 @@
 # SABER (System for Atmospheric and Boundary Layer Error Representation)
 
-> Last updated against commit `d05c06fc` (2026-05-18). Run `cd bundle/saber && git log --oneline d05c06fc..HEAD` to see what changed since.
+> Last updated against commit `be7c6da5` (2026-05-21). Run `cd bundle/saber && git log --oneline be7c6da5..HEAD` to see what changed since.
 >
 > **Covers:** SaberCentralBlockBase, SaberOuterBlockBase, SaberParametricBlockChain, SaberEnsembleBlockChain, SaberHybridBlockChain, SaberOuterBlockChain, BUMP_NICAS, Diffusion/DiffusionImpl/DiffusionFilter, FastLAM, Bifourier, SpectralCovariance/Correlation/AnalyticalCorrelation, StdDev, VertLoc, DuplicateVariables, ID, GaussToCS, VaderBlock, TorchBalance, GSIBlockChain, QUENCH testbed, ErrorCovariance<MODEL>, ErrorCovarianceToolbox, ProcessPerts, Localization, multiply/multiplyAD/leftInverseMultiply/multiplySqrt, direct/iterative calibration, dirac tests, CoupledErrorCovariance.
 

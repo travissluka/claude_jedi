@@ -1,6 +1,6 @@
 # OOPS (Object Oriented Prediction System)
 
-> Last updated against commit `192c83c4` (2026-05-20). Run `cd bundle/oops && git log --oneline 192c83c4..HEAD` to see what changed since.
+> Last updated against commit `1d4fd4ca` (2026-05-21). Run `cd bundle/oops && git log --oneline 1d4fd4ca..HEAD` to see what changed since.
 >
 > **Covers:** Variational, CostFunction, CostFct3DVar/3DFGAT/4DVar/WC4DVar/4DEnsVar, CostJo, CostJb3D/4D/Jq, Minimizer (PCG/DRPCG/FGMRES/RPCG/...), LocalEnsembleSolver, LETKF/GETKF (Deterministic/Stochastic), SequentialEnsembleSolver/EAKF, LocalEnsembleDA, Observer, Observers, Variables, FieldSet3D/4D, FieldSets, IncrementSet, StateSet, GeometryData, PseudoModel, CommRedistribution, CommRedistributionRepository, FieldSetSubCommunicators, Application runs (Forecast/HofX/EDA/GenEnsPertB/...), inflation (RTPP/RTPS/mult), cross-validation, Nerger regulation, implicit/explicit Diffusion, L95/QG toy models.
 

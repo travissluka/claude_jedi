@@ -96,7 +96,7 @@ If this section gets out of sync with CMake, refresh it as part of `/update-repo
 | **saber** | vader, optional FFTW, ECTRANS, gsibec, PyTorch/LibTorch (for TorchBalance) |
 | **vader** | optional GSW (enables ocean recipes) |
 | **fv3-jedi** | fv3-jedi-lm ≥1.5.0, FMS 2023.04, optional crtm/gsibec/GEOS GCM/UFS |
-| **soca** | FMS 2023.3.0 (R8), GSL-lite, MOM6 (`external/mom6`), Icepack (`external/icepack`), optional PyTorch (for MLBalance) |
+| **soca** | FMS 2023.3.0 (R8) — used for `fms_init`/`fms_end`, mpp domain decomposition, and `mpp_broadcast`/`mpp_gather`/`mpp_scatter`; `fms_io_mod` is no longer linked (replaced by in-tree `src/soca/IO/soca_io_mod.F90` direct-netCDF). GSL-lite, MOM6 (`external/mom6`), Icepack (`external/icepack`), optional PyTorch (for MLBalance) |
 | **mpas-jedi** | MPAS 8.0, optional RTTOV 12.1.0, ROPP-UFO |
 | **pyiri-jedi** | Python 3.5+, CFFI, PyIRI submodule |
 | **coupling** | fv3-jedi, soca, saber, ioda, ufo, crtm; optional oasim |

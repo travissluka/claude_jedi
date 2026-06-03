@@ -1,6 +1,6 @@
 # SABER (System for Atmospheric and Boundary Layer Error Representation)
 
-> Last updated against commit `be7c6da5` (2026-05-21). Run `cd bundle/saber && git log --oneline be7c6da5..HEAD` to see what changed since.
+> Last updated against commit `b3a9958a` (2026-05-28). Run `cd bundle/saber && git log --oneline b3a9958a..HEAD` to see what changed since.
 >
 > **Covers:** SaberCentralBlockBase, SaberOuterBlockBase, SaberParametricBlockChain, SaberEnsembleBlockChain, SaberHybridBlockChain, SaberOuterBlockChain, BUMP_NICAS, Diffusion/DiffusionImpl/DiffusionFilter, FastLAM, Bifourier, SpectralCovariance/Correlation/AnalyticalCorrelation, StdDev, VertLoc, DuplicateVariables, ID, GaussToCS, VaderBlock, TorchBalance, GSIBlockChain, QUENCH testbed, ErrorCovariance<MODEL>, ErrorCovarianceToolbox, ProcessPerts, Localization, multiply/multiplyAD/leftInverseMultiply/multiplySqrt, direct/iterative calibration, dirac tests, CoupledErrorCovariance.
 
@@ -48,8 +48,9 @@ Three chain types compose blocks into full covariance operators:
 - Optional localization via its own block chain
 - Optional **ensemble transform**: chain of outer blocks applied via `rightInverseMultiply()` to ensemble members before covariance computation (any outer block can be used)
 - Optional **inflation**: multiplicative field and/or scalar value applied to ensemble
+- Optional **scaled perturbations** (PR #1240): override the default `1/(N-1)` covariance denominator via YAML key `denominator for normalizing ensemble covariance` (double). Useful when the loaded ensemble already represents perturbations from a different effective population size, or for user-tuned inflation-like scaling. Scaling is applied once at load time by `readAndScaleEnsemble` (`saber/oops/Utilities.h`), which pre-multiplies each member by `1/√denom` — so `multiply`/`randomize`/`multiplySqrt`/`multiplySqrtAD` no longer divide by `(N-1)` at apply time. Math is unchanged; this just moves the cost to load.
 - Ensemble sources: states, perturbations, base+perturbations, pair differences, or on alternative geometry
-- Config keys: `ensemble`, `localization`, `ensemble transform`, `inflation field`, `inflation value`
+- Config keys: `ensemble`, `localization`, `ensemble transform`, `inflation field`, `inflation value`, `denominator for normalizing ensemble covariance`
 
 **`SaberHybridBlockChain`** — Weighted combination of multiple covariances:
 - Outer blocks + weighted components (each a full covariance + weight)
@@ -80,7 +81,9 @@ For each member ie:
   else:
     tmp = ensemble[ie] * dot_product(fset, ensemble[ie])
   result += tmp
-result /= (ens_size - 1)
+# Default denom = N-1; user can override via "denominator for normalizing
+# ensemble covariance". Applied at load time (members pre-scaled by 1/√denom
+# in readAndScaleEnsemble), so no explicit divide here in the new code path.
 ```
 
 **Hybrid chain** (step 2 replaced by): for each component j, apply `√wⱼ`, multiply by component B, apply `√wⱼ` again, accumulate. Gives `B_hybrid = Σⱼ √wⱼ · Bⱼ · √wⱼ` which preserves self-adjointness. Optional `run in parallel: true` splits MPI ranks across components.
@@ -160,6 +163,7 @@ Not a block — a pseudo-model for testing SABER blocks with any ATLAS grid. Imp
 | `OrographicInterp` | Orographic interpolation |
 | `ShadowLevels` | Extra/shadow level handling |
 | `WriteFields` | Output intermediate fields for debugging |
+| `ResidualFields` | Reads a FieldSet from `input path` (optional `parallel IO`) for filtering; `multiply fset filename` debug output (PR #1244) |
 
 ### `bump/` — BUMP (Background error on Unstructured Mesh Package) — Fortran-heavy
 
@@ -186,9 +190,11 @@ C++ wrappers: `BUMP.h`, `NICAS.h`, `type_bump.h`. Extensive configuration via `B
 
 Transform backends: `BifourierTransformFFTW`, `BifourierTransformECTRANS`.
 
+The biperiodization step's `inner partitioner` YAML key is **optional** (PR #1250): it is required only when the outer partitioner is `custom`; otherwise the function space and partition are copied from the outer grid (previously it defaulted to `checkerboard` and was always read).
+
 ### `fastlam/` — Fast Limited Area Model correlation (requires FFTW)
 
-Main block: `FastLAM` (59KB impl). Layer types: `LayerSpec` (spectral), `LayerHalo`, `LayerRC` (regional covariance). Supports iterative calibration.
+Main block: `FastLAM` (59KB impl). Layer types: `LayerSpec` (spectral), `LayerHalo`, `LayerRC` (regional covariance). Supports iterative calibration. As of PR #1176, square-root-based central blocks (incl. FastLAM) route randomization through a new `randomCtlVec(field, member)` virtual rather than overriding `randomize`/`multiply` directly; `randomize`/`multiply` are no longer pure-virtual on `SaberCentralBlockBase` (base defaults provided); FastLAM caches `ctlVecSize_`. Backed by the internal `saber/util/Randomization` helper (`util::randomCtlVec`).
 
 ### `diffusion/` — Diffusion localization, explicit + implicit vertical (C++ only)
 
@@ -216,7 +222,7 @@ vertical:
 
 ### `vader/` — VADER variable transformation integration (40+ files)
 
-`VaderBlock` wraps VADER transformations. Implements physical variable conversions: air temperature, dry air density, geopotential↔hydrostatic pressure, hydrostatic balance, moisture control operators. `DefaultCookbook.h` defines the default transformation chain.
+`VaderBlock` wraps VADER transformations. Implements physical variable conversions: air temperature, dry air density, geopotential↔hydrostatic pressure, hydrostatic balance, moisture control operators. `DefaultCookbook.h` defines the default transformation chain. PR #1244 added `DryMoistIncrOp` (`mo_dry_mio`) — converts dry-air ↔ moist-air-and-condensed-water mixing ratios (water vapor / cloud liquid / cloud ice), with full inverse + direct calibration; pairs with the filtering (`ResidualFields`) and updated `SuperMoistIncrOp`/`MoistureControl` changes in the same PR.
 
 ### `gsi/` — GSI (Gridpoint Statistical Interpolation) covariance
 
@@ -288,6 +294,7 @@ Outer blocks (used in `saber outer blocks: [{ saber block name: "<name>" }]`):
 | `duplicate variables` | DuplicateVariables | generic/ |
 | `OrographicInterp` | OrographicInterp | generic/ |
 | `write fields` | WriteFields | generic/ |
+| `residual fields` | ResidualFields | generic/ |
 | `interpolation` | Interpolation | interpolation/ |
 | `gauss to cubed-sphere-dual` | GaussToCS | interpolation/ |
 | `simple vertical projection` | VertProj | interpolation/ |
@@ -306,6 +313,7 @@ Outer blocks (used in `saber outer blocks: [{ saber block name: "<name>" }]`):
 | `mo_hydro_bal` | HydroBal | vader/ |
 | `mo_moistincrop` | MoistIncrOp | vader/ |
 | `mo_moisture_control` | MoistureControl | vader/ |
+| `mo_dry_mio` | DryMoistIncrOp | vader/ |
 | `BifourierBalance` | BifourierBalance | bifourier/ |
 | `BifourierAromeBalance` | BifourierAromeBalance | bifourier/ |
 | `BifourierSpectralToGrid` | BifourierSpectralToGrid | bifourier/ |

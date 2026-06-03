@@ -26,6 +26,8 @@ When preparing a PR for the author's review, follow this sequence:
      ```
    - Check feedback memory for any PR workflow preferences (`feedback_pr_authoring_workflow`) — most other PR rules now live in this file directly.
 
+0.5. **Audit the branch history for Claude attribution before opening.** Commits inherited from earlier sessions may carry `Co-Authored-By: Claude` trailers (bit the project twice: oops 2026-06-02, ufo#4176 2026-06-03). Before `gh pr create` (or any first push of a branch), verify `git -C bundle/<repo> log --format='%h %(trailers)' develop..HEAD | grep -ic claude` returns 0. If not, strip with `git filter-branch -f --msg-filter 'grep -vi "^Co-Authored-By: Claude"' -- <base>..HEAD` (trees stay identical) and force-push before the PR exists. (New commits are guarded by the `no_claude_attribution.sh` Claude Code hooks; this audit covers pre-hook history.)
+
 1. **Draft the full PR text** (title + body following the template structure below) and surface it in chat for review *before* calling `gh pr create`. Do not open the PR until the user has approved the wording.
 2. Along with the body, propose:
    - **Reviewers** — pull candidates from `git -C bundle/<repo> log --format='%an' --since=<recent> -- <changed-paths> | sort | uniq -c | sort -rn`. Surface the top contributors to the affected files, with commit counts. `claude/maintainers.md` is the **admin/escalation** list, not a review pool — most reviewers are topical contributors who aren't on it. Use a maintainer name only when they are independently topically relevant. Filter out the PR author. Do NOT assign reviewers yet; assignment waits until CI is green.

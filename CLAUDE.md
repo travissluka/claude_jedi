@@ -39,9 +39,11 @@ Verify: `$SPACK_STACK_VER` should print `1.9.2`. Sets `JEDI_ROOT=~/work/jedi`.
 ## Build & Test (common commands)
 
 ```bash
+# Build generator is make OR ninja depending on how the user configured cmake.
+# Check with: grep CMAKE_GENERATOR /home/tsluka/work/jedi/build/CMakeCache.txt
 cd /home/tsluka/work/jedi/build
-make -j$(nproc)                                    # full rebuild
-cd /home/tsluka/work/jedi/build/<repo> && make -j  # single-repo rebuild (lib + tests + executables); oops, ufo, saber, ...
+make -j16   # (ninja build:) ninja            # full rebuild
+cd /home/tsluka/work/jedi/build/<repo> && make -j16   # (ninja build:) ninja <repo>   # single-repo rebuild; oops, ufo, saber, ...
 cmake /home/tsluka/work/jedi/bundle                # reconfigure
 
 ctest --output-on-failure -R <pat>   # run tests (append -N to list, -E coding_norms to skip lint)

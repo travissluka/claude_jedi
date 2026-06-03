@@ -1,6 +1,6 @@
 # SOCA (Sea-ice, Ocean, and Coupled Assimilation)
 
-> Last updated against commit `4b0c6a80` (2026-05-21). Run `cd bundle/soca && git log --oneline 4b0c6a80..HEAD` to see what changed since.
+> Last updated against commit `cf904065` (2026-05-28). Run `cd bundle/soca && git log --oneline cf904065..HEAD` to see what changed since.
 >
 > **Covers:** soca::Traits, soca::{Geometry,State,Increment,ModelOceanIceEmulator,LinearModelOceanIceEmulator,VariableChange}, ObsLocRossby, SABER SOCA blocks (BkgErrFilt, ParametricOceanStdDev, MLBalance), MOM6 restart format, Icepack sea-ice, KEmul/IceEmul ML emulators, opaque-handle Fortran pattern (F90geom/F90flds/F90iter/F90model/F90bmat), `soca_io_mod` direct-netCDF reader/writer.
 
@@ -162,6 +162,8 @@ Default variables (from `ModelData`): sea water temperature, salinity, SSH, east
 | `soca_gen_hybrid_linear_model_coeffs.x` | Hybrid TLM coefficient generation |
 | `soca_tlm_toolbox.x` | `TLMToolbox` (TLM verification) |
 | `soca_ice_emulator.x` | Ice emulator training (Torch, conditional) |
+
+As of PR #1244, `AnalysisPostproc`'s `set increment variables to zero` no longer requires the named variables to be a subset of the increment variables — variables not already present are added to the increment (via `Increment::updateFields`) before zeroing, so zero-out variables need not appear in the increment-variables list. Relatedly, `soca::State`'s increment-add path now skips (with a warning) increment variables absent from the state instead of failing.
 
 ## Tests
 

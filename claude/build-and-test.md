@@ -4,7 +4,7 @@
 
 Common build commands, test invocations, and shared dependencies are in `CLAUDE.md`. This file only lists what's *unique* per repo — flags that toggle features, external dependencies beyond the common set, and test naming quirks.
 
-**Shared across all repos** (no need to list per-repo): eckit, fckit, atlas, MPI, NetCDF, Boost, LAPACK, OpenMP. Version pins live in `bundle/CMakeLists.txt`. All repos build via `cd build/<repo> && make -j` (lib + tests + executables; `make <repo>` from the top-level `build/` only builds the library, leaving test binaries stale) and test via `ctest -R <repo>`.
+**Shared across all repos** (no need to list per-repo): eckit, fckit, atlas, MPI, NetCDF, Boost, LAPACK, OpenMP. Version pins live in `bundle/CMakeLists.txt`. Build with make or ninja depending on how the user configured cmake (`grep CMAKE_GENERATOR build/CMakeCache.txt`); see "Per-repo rebuild: scope matters" below for the lib-only-vs-everything caveat per generator. Test via `ctest -R <repo>`.
 
 ## Build dependency DAG
 
@@ -16,7 +16,7 @@ Levels (everything in a level depends only on prior levels; within a level, repo
 L0  leaves:           gsw   crtm   mpas   fv3-jedi-lm   oops
 L1  core (1 hop):     vader (←oops)        ioda (←oops)
 L2  core (2 hops):    saber (←oops,vader)  ufo  (←oops,ioda)
-L3  model interfaces: fv3-jedi    (←oops, saber, ufo, vader, crtm, fv3-jedi-lm)
+L3  model interfaces: fv3-jedi    (←oops, saber, ufo, vader, fv3-jedi-lm; crtm optional)
                       soca        (←oops, saber, ufo, vader, ioda)
                       mpas-jedi   (←oops, saber, ufo, ioda, mpas)
                       pyiri-jedi  (←oops, ufo, ioda)
@@ -36,7 +36,7 @@ The L3 model-interface repos are **siblings** — none depends on another. mpas 
 | `ioda` | oops | optional QUIET: ioda-data |
 | `saber` | oops, vader | optional QUIET: FFTW, ECTRANS, gsibec, jedi-model-data |
 | `ufo` | oops, ioda | optional QUIET: crtm, rttov, gsw, ropp-ufo, geos-aero, oasim, ufo-data |
-| `fv3-jedi` | oops, saber, ufo, vader, crtm, fv3-jedi-lm (`fv3jedilm`) | also FMS/MAPL via FV3_FORECAST_MODEL |
+| `fv3-jedi` | oops, saber, ufo, vader, fv3-jedi-lm (`fv3jedilm`) | optional QUIET: crtm (PR #1506); also FMS/MAPL via FV3_FORECAST_MODEL |
 | `soca` | oops, vader, saber, ioda, ufo | also FMS, GSL-lite, MOM6, Icepack |
 | `mpas-jedi` | oops, saber, ioda, ufo, mpas (`MPAS 8.0`) | optional rttov, ropp-ufo |
 | `pyiri-jedi` | oops, ioda, ufo | bundled PyIRI submodule |
@@ -46,7 +46,7 @@ The L3 model-interface repos are **siblings** — none depends on another. mpas 
 
 - Model-interface repos (`fv3-jedi`, `soca`, `mpas-jedi`, `pyiri-jedi`) are **siblings**, not a chain. None of them depend on each other; they all sit on the same level above the model-agnostic core (`oops`, `ioda`, `ufo`, `saber`, `vader`).
 - `coupling` is the only repo whose effective build deps (oops + ioda + fv3-jedi + soca) exceed its declared top-level find_package deps. The extra deps live in a subdir's `target_link_libraries`, so a parallel build that doesn't have fv3-jedi+soca built first will fail at coupling's link step but pass earlier configure/find_package checks.
-- `crtm` is only required by `fv3-jedi`. `ufo` and `mpas-jedi` reference it via QUIET find_package and degrade gracefully if absent.
+- `crtm` is no longer hard-required by any repo: as of fv3-jedi PR #1506 it is `find_package(crtm QUIET)` there too, joining `ufo` and `mpas-jedi` in degrading gracefully (disabling CRTM-dependent code paths/tests) when absent.
 - `mpas` (the MPAS-Model) is only required by `mpas-jedi`. The bundle pins it to a tag (currently `v8.2.1`).
 - `fv3-jedi-lm` is only required by `fv3-jedi`.
 
@@ -131,11 +131,16 @@ Close the paren before `BRANCH`, then `#` out the trailing tokens. Restore the c
 
 ### Per-repo rebuild: scope matters
 
-`cd build/<repo> && make -j` rebuilds the library, all tests, and all executables in that repo's subgraph.
+The build generator is **make or ninja depending on how the user configured cmake** (check `grep CMAKE_GENERATOR build/CMakeCache.txt`). The two have different per-repo ergonomics:
 
-`make -j <repo>` from the top-level `build/` rebuilds **only the library**. Test binaries and executables (e.g. `soca_letkf.x`) keep their old timestamps and silently link against the previous object files for any templates instantiated in the executable's translation units — meaning your log lines, new methods, or behavioral changes won't appear when you re-run.
+- **Make:** `cd build/<repo> && make -j` rebuilds the library, all tests, and all executables in that repo's subgraph. `make -j <repo>` from the top-level `build/` rebuilds **only the library**.
+- **Ninja:** there are no per-repo Makefiles (single top-level `build/build.ninja`). From `build/`, `ninja <repo>` rebuilds **only the library** — the same "lib only" scope as top-level `make <repo>`. To rebuild a repo's tests/executables too, name those targets or run a full `ninja`.
 
-Whenever a code change matters at runtime (added an `oops::Log::info()`, changed a virtual, added a template specialization), use the `cd build/<repo>` form.
+The "lib only" forms leave test binaries and executables (e.g. `soca_letkf.x`) with old timestamps; they silently link against the previous object files for any templates instantiated in the executable's translation units — so your log lines, new methods, or behavioral changes won't appear when you re-run.
+
+Whenever a code change matters at runtime (added an `oops::Log::info()`, changed a virtual, added a template specialization), make sure tests/executables are rebuilt — under Make use the `cd build/<repo> && make` form; under Ninja build the test/executable targets (or run a full `ninja`).
+
+**Worse than missing log lines:** if the change altered a class's **data members** (size/layout), a stale test exe is an ODR violation — its inlined ctors/dtors use the old member offsets against the freshly-built library's new layout. Symptom: the test computes plausible-looking (but UB) numbers, then SIGSEGV/SIGABRTs in the destructor at teardown (e.g. `munmap_chunk(): invalid pointer` freeing a "member" past the end of the object). If a test crashes only at exit after a header change, suspect a stale exe and run a full rebuild before debugging the code.
 
 ## ctest env-var gotchas
 

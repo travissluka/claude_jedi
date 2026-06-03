@@ -1,6 +1,6 @@
 # jedi-docs
 
-> Last updated against commit `c1cdff8d` (2026-05-20). Run `cd bundle/jedi-docs && git log --oneline c1cdff8d..HEAD` to see what changed since.
+> Last updated against commit `a4c36c1d` (2026-06-02). Run `cd bundle/jedi-docs && git log --oneline a4c36c1d..HEAD` to see what changed since.
 >
 > **Covers:** IODA data conventions (variable naming, units, groups), spack-stack/JEDI version compatibility, JEDI git flow (main/develop/feature/bugfix/hotfix/release), YAML config reference, JEDI-EDU tutorials, build troubleshooting FAQ.
 

@@ -1,6 +1,6 @@
 # VADER (The VAriable DErivation Repository)
 
-> Last updated against commit `f74de951` (2026-05-12). Run `cd bundle/vader && git log --oneline f74de951..HEAD` to see what changed since.
+> Last updated against commit `ca78ff81` (2026-05-24). Run `cd bundle/vader && git log --oneline ca78ff81..HEAD` to see what changed since.
 >
 > **Covers:** Vader, RecipeBase, DefaultCookbook, VaderParameters, planVariable algorithm, _A/_B/_C recipe variants, changeVar/changeVarTraj/changeVarTL/changeVarAD, AirTemperature, DryAirDensity, HydrostaticPressure, RelativeHumidity, MoistureControl, Met Office SVP lookup tables (`src/mo/`), DustBin1MassConcentration_A, DustBin2MassConcentration_A, eval_dust_bin_mass_concentration_nl, GSW OceanConversions, adjoint dot-product test pattern, adding a new recipe.
 
@@ -102,7 +102,9 @@ VADER follows JEDI naming standards (from jedi-docs conventions):
 
 ### TL/AD Support
 
-Most temperature, pressure, density, and geopotential `_A` variants have TL/AD. Humidity and cloud recipes are generally NL-only. `RelativeHumidity_A` is notable for using Met Office saturation vapor pressure lookup tables (`src/mo/`) rather than simple formulas, with full TL/AD support.
+Most temperature, pressure, density, and geopotential `_A` variants have TL/AD. Humidity and cloud recipes are generally NL-only. `RelativeHumidity_A` is notable for using Met Office saturation vapor pressure lookup tables (`src/mo/`) rather than simple formulas, with full TL/AD support. `AirPressureThickness_A` gained full TL/AD support in PR #370.
+
+**Level ordering** (PR #370): recipes that depend on vertical orientation honor a `levels_are_top_down` config flag. It controls the pressure-thickness sign (so `AirPressureThickness_A` returns always-positive thickness either way), the surface-level index selected by the 10m wind recipes (`EastwardWindAt10m`/`NorthwardWindAt10m` pick `0` for bottom-up vs `nLevels-1` for top-down), and the integration direction in `AirPressureAtInterface_B`.
 
 ## Recipe Implementation Pattern
 

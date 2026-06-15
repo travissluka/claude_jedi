@@ -81,7 +81,7 @@ If this section gets out of sync with CMake, refresh it as part of `/update-repo
 |------|---------------------|
 | **oops** | `ENABLE_LORENZ95_MODEL` (ON), `ENABLE_QG_MODEL` (ON), `ENABLE_MKL` (ON), `ENABLE_GPTL` (OFF) |
 | **ioda** | `IODA_BUILD_LANGUAGE_FORTRAN` (ON), `BUILD_PYTHON_BINDINGS` (ON if pybind11 found), `ENABLE_IODA_DOC` (OFF) |
-| **saber** | `ENABLE_BUMP` (ON), `ENABLE_QUENCH` (ON — pseudo-model testbed), `OPENMP` (ON). Conditional blocks: Bifourier/FastLAM require FFTW; Bifourier can alternatively use ECTRANS+transi; GSI requires gsibec; SpectralB requires atlas TRANS or ECTRANS. |
+| **saber** | `ENABLE_BUMP` (ON), `ENABLE_QUENCH` (ON — pseudo-model testbed), `OPENMP` (ON). Conditional blocks: Bifourier/FastLAM require FFTW; Bifourier can alternatively use ECTRANS+transi; GSI requires gsibec; SpectralB requires atlas TRANS or ECTRANS. `ENABLE_TORCH` + `VENV_DIR` create one shared python/torch venv (saber#1207); `ATLAS_SCOPE_ISSUE_RESOLVED` renamed `ATLAS_VERSION_46_OR_GREATER` (gates SMV-interp blocks). |
 | **fv3-jedi** | `FV3_FORECAST_MODEL` (GEOS \| UFS \| FV3CORE), `FV3_PRECISION` (DOUBLE default \| SINGLE) |
 | **mpas-jedi** | Requires MPAS 8.0 `core_atmosphere` component |
 | **pyiri-jedi** | Requires Python 3.5+ and CFFI; PyIRI included as git submodule |

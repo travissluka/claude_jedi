@@ -1,6 +1,6 @@
 # VADER (The VAriable DErivation Repository)
 
-> Last updated against commit `ca78ff81` (2026-05-24). Run `cd bundle/vader && git log --oneline ca78ff81..HEAD` to see what changed since.
+> Last updated against commit `80a98e5e` (2026-06-15). Run `cd bundle/vader && git log --oneline 80a98e5e..HEAD` to see what changed since.
 >
 > **Covers:** Vader, RecipeBase, DefaultCookbook, VaderParameters, planVariable algorithm, _A/_B/_C recipe variants, changeVar/changeVarTraj/changeVarTL/changeVarAD, AirTemperature, DryAirDensity, HydrostaticPressure, RelativeHumidity, MoistureControl, Met Office SVP lookup tables (`src/mo/`), DustBin1MassConcentration_A, DustBin2MassConcentration_A, eval_dust_bin_mass_concentration_nl, GSW OceanConversions, adjoint dot-product test pattern, adding a new recipe.
 
@@ -82,7 +82,7 @@ VADER follows JEDI naming standards (from jedi-docs conventions):
 
 **Temperature** (6): AirTemperature (A/B/C), AirVirtualTemperature (A/B), AirPotentialTemperature (A/B)
 
-**Pressure** (11): AirPressure, AirPressureAtInterface (A/B/C), AirPressureThickness, AirPressureExtendedUpByOne, HydrostaticExnerLevels, HydrostaticPressureLevels, LnAirPressure, LnAirPressureAtInterface, SurfaceAirPressure
+**Pressure** (13): AirPressure (A/B), AirPressureAtInterface (A/B/C/D), AirPressureThickness, AirPressureExtendedUpByOne, HydrostaticExnerLevels, HydrostaticPressureLevels, LnAirPressure, LnAirPressureAtInterface, SurfaceAirPressure. `AirPressure_B` (→ `air_pressure`, mid-level) and `AirPressureAtInterface_D` (→ `air_pressure_levels`, interface) derive pressure directly from `air_pressure_at_surface` via hybrid-sigma `ak`/`bk` coefficients (`sigma_pressure_hybrid_coordinate_a/b_coefficient`): `ak[k] + bk[k]*ps` at interfaces, layer-averaged for mid-levels. This is a distinct ingredient path from the Phillips interface-based recipes (PR #356).
 
 **Humidity** (8+): WaterVaporMixingRatio variants (dry/wet air, 2m), RelativeHumidity (A — special case, uses lookup tables from `src/mo/`), SaturationVaporPressure, SaturationSpecificHumidity, LogDerivativeSaturationVaporPressure
 
@@ -102,9 +102,9 @@ VADER follows JEDI naming standards (from jedi-docs conventions):
 
 ### TL/AD Support
 
-Most temperature, pressure, density, and geopotential `_A` variants have TL/AD. Humidity and cloud recipes are generally NL-only. `RelativeHumidity_A` is notable for using Met Office saturation vapor pressure lookup tables (`src/mo/`) rather than simple formulas, with full TL/AD support. `AirPressureThickness_A` gained full TL/AD support in PR #370.
+Most temperature, pressure, density, and geopotential `_A` variants have TL/AD. Humidity and cloud recipes are generally NL-only. `RelativeHumidity_A` is notable for using Met Office saturation vapor pressure lookup tables (`src/mo/`) rather than simple formulas, with full TL/AD support. `AirPressureThickness_A` gained full TL/AD support in PR #370. `AirPressure_A`, `AirPressure_B`, and `AirPressureAtInterface_D` have full TL/AD (PR #356) — `AirPressure_A` is no longer NL-only Phillips.
 
-**Level ordering** (PR #370): recipes that depend on vertical orientation honor a `levels_are_top_down` config flag. It controls the pressure-thickness sign (so `AirPressureThickness_A` returns always-positive thickness either way), the surface-level index selected by the 10m wind recipes (`EastwardWindAt10m`/`NorthwardWindAt10m` pick `0` for bottom-up vs `nLevels-1` for top-down), and the integration direction in `AirPressureAtInterface_B`.
+**Level ordering** (PR #370, extended in #356): recipes that depend on vertical orientation honor a `levels_are_top_down` config flag. It controls the pressure-thickness sign (so `AirPressureThickness_A` returns always-positive thickness either way), the surface-level index selected by the 10m wind recipes (`EastwardWindAt10m`/`NorthwardWindAt10m` pick `0` for bottom-up vs `nLevels-1` for top-down), the integration direction in `AirPressureAtInterface_B`, and the upper/lower level selection in `AirPressure_A`.
 
 ## Recipe Implementation Pattern
 

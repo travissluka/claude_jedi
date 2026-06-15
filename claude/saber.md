@@ -1,6 +1,6 @@
 # SABER (System for Atmospheric and Boundary Layer Error Representation)
 
-> Last updated against commit `b3a9958a` (2026-05-28). Run `cd bundle/saber && git log --oneline b3a9958a..HEAD` to see what changed since.
+> Last updated against commit `74875a09` (2026-06-10). Run `cd bundle/saber && git log --oneline 74875a09..HEAD` to see what changed since.
 >
 > **Covers:** SaberCentralBlockBase, SaberOuterBlockBase, SaberParametricBlockChain, SaberEnsembleBlockChain, SaberHybridBlockChain, SaberOuterBlockChain, BUMP_NICAS, Diffusion/DiffusionImpl/DiffusionFilter, FastLAM, Bifourier, SpectralCovariance/Correlation/AnalyticalCorrelation, StdDev, VertLoc, DuplicateVariables, ID, GaussToCS, VaderBlock, TorchBalance, GSIBlockChain, QUENCH testbed, ErrorCovariance<MODEL>, ErrorCovarianceToolbox, ProcessPerts, Localization, multiply/multiplyAD/leftInverseMultiply/multiplySqrt, direct/iterative calibration, dirac tests, CoupledErrorCovariance.
 
@@ -194,7 +194,7 @@ The biperiodization step's `inner partitioner` YAML key is **optional** (PR #125
 
 ### `fastlam/` — Fast Limited Area Model correlation (requires FFTW)
 
-Main block: `FastLAM` (59KB impl). Layer types: `LayerSpec` (spectral), `LayerHalo`, `LayerRC` (regional covariance). Supports iterative calibration. As of PR #1176, square-root-based central blocks (incl. FastLAM) route randomization through a new `randomCtlVec(field, member)` virtual rather than overriding `randomize`/`multiply` directly; `randomize`/`multiply` are no longer pure-virtual on `SaberCentralBlockBase` (base defaults provided); FastLAM caches `ctlVecSize_`. Backed by the internal `saber/util/Randomization` helper (`util::randomCtlVec`).
+Main block: `FastLAM` (59KB impl). Layer types: `LayerSpec` (spectral), `LayerHalo`, `LayerRC` (regional covariance). Supports iterative calibration. As of PR #1176, square-root-based central blocks (incl. FastLAM) route randomization through a new `randomCtlVec(field, member)` virtual rather than overriding `randomize`/`multiply` directly; `randomize`/`multiply` are no longer pure-virtual on `SaberCentralBlockBase` (base defaults provided); FastLAM caches `ctlVecSize_`. Backed by the internal `saber/util/Randomization` helper (`util::randomCtlVec`). PR #1248 added a `"duplicated and weighted"` multivariate strategy (alongside `"duplicated"`/`"crossed"`) with weighted cross-variable correlations, plus YAML params `sampling horizontal length-scale`, `sampling vertical length-scale`, `inner grid-point function space from background variable`, `default off-diagonal weight`, and `specific off-diagonal weights`; internally the reduction-factor getters (`rfh`/`rfv`) gave way to sampling length-scales (`srh`/`srv`) and explicit grid dims (`nx`/`ny`/`nz`).
 
 ### `diffusion/` — Diffusion localization, explicit + implicit vertical (C++ only)
 
@@ -230,7 +230,7 @@ vertical:
 
 ### `interpolation/` — Grid interpolation blocks
 
-`Interpolation`, `GaussToCS` (Gaussian→cubed-sphere), `Rescaling`, `VertProj` (vertical projection). Uses ATLAS interpolation wrappers. `setupGsiMatchingGrid` (`Geometry.cc`) accepts `type: rotated_lonlat` (alongside `gaussian` and `latlon`); requires `lat_start`/`lat_end`/`lon_start`/`lon_end`/`north_pole_lat`/`north_pole_lon` YAML keys and builds an ATLAS `StructuredGrid` with a rotated-lonlat projection — used to wire regional fv3/mpas analyses to GSIbec.
+`Interpolation`, `GaussToCS` (Gaussian→cubed-sphere), `Rescaling`, `VertProj` (vertical projection). Uses ATLAS interpolation wrappers. SMV variants `GaussToCSWithSMV` (here) and `GaussUVToGPWithSMV` (`spectralb/`), via `SMVInterpWrapper`, use the ATLAS ≥0.46 spherical-mean-value interpolator (saber#1241; gated by `ATLAS_VERSION_46_OR_GREATER`, the renamed `ATLAS_SCOPE_ISSUE_RESOLVED`) for better-conditioned Gauss↔cubed-sphere inverse transforms via redistribution. `setupGsiMatchingGrid` (`Geometry.cc`) accepts `type: rotated_lonlat` (alongside `gaussian` and `latlon`); requires `lat_start`/`lat_end`/`lon_start`/`lon_end`/`north_pole_lat`/`north_pole_lon` YAML keys and builds an ATLAS `StructuredGrid` with a rotated-lonlat projection — used to wire regional fv3/mpas analyses to GSIbec.
 
 ### `coupled/` — Block-diagonal coupled covariance (C++ only)
 
@@ -297,6 +297,7 @@ Outer blocks (used in `saber outer blocks: [{ saber block name: "<name>" }]`):
 | `residual fields` | ResidualFields | generic/ |
 | `interpolation` | Interpolation | interpolation/ |
 | `gauss to cubed-sphere-dual` | GaussToCS | interpolation/ |
+| `gauss to cubed-sphere-dual with smv-interp` | GaussToCSWithSMV | interpolation/ |
 | `simple vertical projection` | VertProj | interpolation/ |
 | `spectral to gauss` | SpectralToGauss | spectralb/ |
 | `spectral to spectral` | SpectralToSpectral | spectralb/ |
@@ -306,6 +307,7 @@ Outer blocks (used in `saber outer blocks: [{ saber block name: "<name>" }]`):
 | `square root of spectral covariance` | SqrtOfSpectralCovariance | spectralb/ |
 | `square root of spectral correlation` | SqrtOfSpectralCorrelation | spectralb/ |
 | `gauss winds to geostrophic pressure` | GaussUVToGP | spectralb/ |
+| `gauss winds to geostrophic pressure with smv-interp` | GaussUVToGPWithSMV | spectralb/ |
 | `mo_hydrostatic_pressure` | HydrostaticPressure | spectralb/ |
 | `vader variable change` | VaderBlock | vader/ |
 | `mo_air_temperature` | AirTemperature | vader/ |

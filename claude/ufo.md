@@ -1,8 +1,8 @@
 # UFO (Unified Forward Operators)
 
-> Last updated against commit `71719086` (2026-05-28). Run `cd bundle/ufo && git log --oneline 71719086..HEAD` to see what changed since.
+> Last updated against commit `325f644d` (2026-06-15). Run `cd bundle/ufo && git log --oneline 325f644d..HEAD` to see what changed since.
 >
-> **Covers:** ObsOperator, LinearObsOperator, CompositeObsOperator, GeoVaLs, SampledLocations, ObsFilters, ObsBias, ObsDiagnostics, ObsError (Diagonal/CrossVarCov/BiasCorrelated/WithinGroup), ObsLocalization (Hor/HorGC99/HorSOAR/VertLocalization), QCflags, ObsFunctions, variable transforms, FilterBase, QCmanager, FinalCheck (see also `ufo-filter-lifecycle.md`), ObsTraits, CRTM/RTTOV integration.
+> **Covers:** ObsOperator, LinearObsOperator, CompositeObsOperator, GeoVaLs, SampledLocations, ObsFilters, ObsBias, ObsDiagnostics, ObsError (Diagonal/CrossVarCov/BiasCorrelated/WithinGroup), ObsLocalization (Hor/HorGC99/HorSOAR/VertLocalization), QCflags, ObsFunctions, variable transforms, FilterBase, QCmanager (see also `ufo-filter-lifecycle.md`), ObsTraits, CRTM/RTTOV integration.
 
 ## Overview
 
@@ -43,7 +43,7 @@ Tests are named: `ufo_test_tier1_<name>`.
 
 - **`ObsOperatorBase`** / **`ObsOperator`**: Base class and wrapper for forward operators (H(x)). Concrete operators register via a factory. Each operator also has a corresponding `LinearObsOperatorBase` for TL/AD.
 - **`ObsFilterBase`** / **`ObsFilter`**: Base class for QC filters (observation quality control). Filters run in stages: `PRE`, `PRIOR`, or `POST` (relative to H(x) evaluation).
-- **`ObsFilters`**: Container that runs all configured filters for an obs space. The QCmanager is now separated out as a dedicated `qcmanager_` member (manages QC flags and statistics independently from the filter pipeline).
+- **`ObsFilters`**: Container that runs all configured filters for an obs space. `QCmanager` (now `src/ufo/QCmanager.h`, no longer a filter and not factory-registered — ufo#4137) is held as a dedicated `qcmanager_` member that ObsFilters drives directly: `preSetQc()` before filters (mark missing obs), `postSetQc(hofx)` after POST filters (mark H(x) failures), `finalSetQc()` at the end (absorbed the deleted `FinalCheck` filter's duties).
 - **`GeoVaLs`**: Model state interpolated to observation locations (C++ wrapper with Fortran implementation in `ufo_geovals_mod.F90`).
 - **`ObsDiagnostics`**: Stores diagnostics produced by operators (e.g., for use by filters).
 - **`ObsBias`** / **`ObsBiasOperator`**: Observation bias correction state and application.
@@ -61,7 +61,9 @@ Filters default to PRIOR stage. Explicitly set via `filter stage:` in YAML. Note
 
 ### Operators (`src/ufo/operators/`)
 
-Each operator subdirectory (e.g., `crtm/`, `rttov/`, `gnssro/`, `identity/`, `vertinterp/`) contains a self-contained forward operator with optional TL/AD. Mixed C++/Fortran implementations are common — C++ calls Fortran via an `interface.F90` interop layer.
+Each operator subdirectory (e.g., `crtm/`, `rttov/`, `gnssro/`, `identity/`, `vertinterp/`, `radarpolarimetric/`) contains a self-contained forward operator with optional TL/AD. Mixed C++/Fortran implementations are common — C++ calls Fortran via an `interface.F90` interop layer.
+
+**PPRO** (`operators/radarpolarimetric/ppro/`, class `ObsPPRO`, PR #4107): the Parameterized Polarimetric Radar Operator computes dual-pol radar variables (Zhh / ZDR / KDP / ρhv) from model microphysics fields. YAML param `polarimetric operator` selects the forward model — `Zhang21` (exponential PSD, T-matrix; `Zhang21Forward`) or `TCWA2` (gamma PSD, Rayleigh; `TCWA2Forward`) — and `microphysics option` selects the scheme (Thompson default), with extensive melting / Dm-tuning params. Shared microphysics config lives in `operators/radarshared/` (`MicrophysicsOptions.h`, enum `MicrophysicsOption`), also used by `radarreflectivity/directZDA`.
 
 **RTTOV interface**: The `rttov/` operator supports both RTTOV v13 and v14. The v14 interface is under `rttov/CPP/v14/` (C++ wrapper via `rttovcpp_interface.h`) and `rttov/Fortran/v14/` (Fortran modules: `ufo_radiancerttov_mod`, `ufo_radiancerttov_tlad_mod`, `ufo_radiancerttov_utils_mod`, `ufo_reconradop_mod`). Version selection is handled at build time.
 

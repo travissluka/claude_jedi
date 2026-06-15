@@ -1,6 +1,6 @@
 # UFO Filter/Operator Lifecycle
 
-> **Covers:** FilterBase, QCmanager, FinalCheck, filter stages (pre-/prior-/post-filters, obsPostFilters), `where` clause, filter actions (RejectObs/AcceptObs/AssignError/InflateError/PassivateObs/ROobserrInflation/SetFlag/SetFlagBit), QCflags (pass/missing/preQC/bounds/domain/blackList/Hfailed/thinned/diffref/clw/fguess/seaice/track/buddy/derivative/processed), ObsFunction, ObsFilterData, ObsDataVector<int> flags, ObsDataVector<float> obserr, variable transforms, CreateDiagnosticFlags, obs-error masking to missing values.
+> **Covers:** FilterBase, QCmanager, filter stages (pre-/prior-/post-filters, obsPostFilters), `where` clause, filter actions (RejectObs/AcceptObs/AssignError/InflateError/PassivateObs/ROobserrInflation/SetFlag/SetFlagBit), QCflags (pass/missing/preQC/bounds/domain/blackList/Hfailed/thinned/diffref/clw/fguess/seaice/track/buddy/derivative/processed), ObsFunction, ObsFilterData, ObsDataVector<int> flags, ObsDataVector<float> obserr, variable transforms, CreateDiagnosticFlags, obs-error masking to missing values.
 
 Detailed guide to filter stages, actions, ObsFunctions, and variable transforms in UFO.
 
@@ -17,7 +17,7 @@ Filters execute in four stages, configured via separate YAML lists:
 
 AUTO stage: if filter requires HofX → POST, if GeoVaLs → PRIOR, if neither → PRE.
 
-Within each stage, filters run **sequentially** in YAML order. Two internal filters are injected automatically: `QCmanager` (first) and `FinalCheck` (last).
+Within each stage, filters run **sequentially** in YAML order. `QCmanager` is **not** a filter (ufo#4137 moved it to `src/ufo/QCmanager.h`, out of the filter factory; the old auto-injected `FinalCheck` filter was deleted and its duties absorbed). Instead, `ObsFilters` drives it directly around the pipeline: `preSetQc()` before any filters (flag missing obs values), `postSetQc(hofx)` after POST filters (flag H(x) failures), and `finalSetQc()` at the very end (final pass/reject bookkeeping, formerly FinalCheck).
 
 ## Filter Base Class
 

@@ -1,6 +1,6 @@
 # MPAS-JEDI
 
-> Last updated against commit `9b4ca0da` (2026-06-02). Run `cd bundle/mpas-jedi && git log --oneline 9b4ca0da..HEAD` to see what changed since.
+> Last updated against commit `6dbc8c95` (2026-06-10). Run `cd bundle/mpas-jedi && git log --oneline 6dbc8c95..HEAD` to see what changed since.
 >
 > **Covers:** mpas::Traits, mpas::{Geometry,State,Increment,Model,LinearModel,VariableChange}, unstructured Voronoi mesh, MPAS 8.0 core_atmosphere integration, variable-resolution support, RTTOV/ROPP-UFO optional operators, opaque-handle Fortran pattern.
 
@@ -32,14 +32,14 @@ Build/test quirks (MPAS 8.0 `core_atmosphere`, optional RTTOV/ROPP-UFO) in `clau
 All Fortran objects accessed via opaque integer handles (`F90geom`, `F90state`, `F90inc`, `F90model`, `F90traj`, etc.). Each C++ class holds a handle and calls `extern "C"` functions with `_f90` suffix.
 
 ### Geometry (`Geometry/`)
-Wraps MPAS mesh in ATLAS `NodeColumns` function space. Reads MPAS namelist/streams files. Provides domain decomposition, coordinates, and connectivity to ATLAS MeshBuilder. Levels are top-down (flipped from MPAS bottom-to-top convention).
+Wraps MPAS mesh in ATLAS `NodeColumns` function space. Reads MPAS namelist/streams files. Provides domain decomposition, coordinates, and connectivity to ATLAS MeshBuilder. Levels are top-down (flipped from MPAS bottom-to-top convention). Exposes a public `isRegional() const` method (backed by `mpas_geo_is_regional_f90`) so callers can detect a regional mesh; added in mpas-jedi #1207 to replace the old unsafe `"regional check enabled": false` bypass after oops #3313 removed that interpolator flag.
 
 ### State / Increment (`State/`, `Increment/`)
 State holds prognostic variables via Fortran `mpas_fields` type. Converts to/from ATLAS FieldSet for SABER/UFO interaction. Increment provides full linear algebra (`axpy`, `dot_product_with`, `schur_product_with`, `dirac`), serialization, and `getLocal`/`setLocal` for localization.
 
 `State::add_incr` optionally refreshes the diagnostic 2 m temperature and 2 m water-vapor mixing ratio from the lowest model level after each outer-loop update — gated by Geometry YAML key `update 2mTQ between outer loops` (default `false`; mpas-jedi #1174). Enable when downstream H(x) consumes the 2 m fields and outer loops are large enough that the lowest model level drifts significantly from the post-add state.
 
-`State::changeResolution` / `Increment::changeResolution` use the OOPS unstructured-grid global interpolator with nearest-neighbor fill for points outside the source mesh; fill radius is configurable via Geometry YAML key `regional nn fill distance in km` (default `500.0` km; mpas-jedi #1199). Tune this for regional/multi-resolution meshes where the source and target mesh boundaries don't fully overlap — too small and target points outside the source mesh stay missing, too large and edge points are pulled from far-away neighbors. Used by `3denvar_multi_resolution_regional` and `3dvar_bumpcov_rttovcpp` tests.
+`State::changeResolution` / `Increment::changeResolution` use the OOPS unstructured-grid global interpolator with nearest-neighbor fill for points outside the source mesh; fill radius is configurable via Geometry YAML key `regional nn fill distance in km` (default `500.0` km; mpas-jedi #1199). As of mpas-jedi #1207 the NN-fill distance is passed to the interpolator only when `isRegional()` is true (the previous `"regional check enabled": false` bypass was dropped). Tune this for regional/multi-resolution meshes where the source and target mesh boundaries don't fully overlap — too small and target points outside the source mesh stay missing, too large and edge points are pulled from far-away neighbors. Used by `3denvar_multi_resolution_regional` and `3dvar_bumpcov_rttovcpp` tests.
 
 ### Fields (`Fields/`)
 Fortran `mpas_fields` type: wraps MPAS pool of fields with array operations (`axpy`, `dot_prod`, `gpnorm`, `rms`). Handles I/O via MPAS stream manager.

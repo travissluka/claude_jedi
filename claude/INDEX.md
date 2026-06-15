@@ -21,7 +21,7 @@ Every per-repo and cross-cutting doc also has its own `> **Covers:** ...` line a
 | Topic | File |
 |-------|------|
 | IODA ObsFile → ObsSpace → CostJo end-to-end | `observation-data-flow.md` |
-| QC flag semantics, FilterBase, QCmanager, FinalCheck | `ufo-filter-lifecycle.md`, `ufo.md` |
+| QC flag semantics, FilterBase, QCmanager (FinalCheck removed, ufo#4137) | `ufo-filter-lifecycle.md`, `ufo.md` |
 | QC → obs error mask → missing-value propagation in Jo | `observation-data-flow.md`, `ufo-filter-lifecycle.md` |
 | Filter actions (RejectObs / AssignError / InflateError / ...) | `ufo-filter-lifecycle.md` |
 | ObsFunctions, ObsFilterData | `ufo-filter-lifecycle.md`, `ufo.md` |

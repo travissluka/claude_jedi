@@ -1,6 +1,6 @@
 # IODA (JEDI Interface for Observation Data Access)
 
-> Last updated against commit `584519b6` (2026-06-02). Run `cd bundle/ioda && git log --oneline 584519b6..HEAD` to see what changed since.
+> Last updated against commit `3501be56` (2026-06-15). Run `cd bundle/ioda && git log --oneline 3501be56..HEAD` to see what changed since.
 >
 > **Covers:** ObsSpace, ObsVector, ObsDataVector, Distribution (RoundRobin/Halo/Inefficient), ObsIterator, DistributionUtils (dot_product, missing-value handling), ioda_engines two-layer design, ObsGroup, ObsStore, HDF5/in-memory/ODB/BUFR backends, OSDF containers, Fortran/Python bindings.
 
@@ -72,7 +72,7 @@ Missing value conventions: `util::missingValue<T>()` — `9.969209968e+36` for f
 
 **BUFR**: Reads BUFR files using `bufr_query` library. Requires a **mapping file** (YAML) that defines how BUFR descriptors map to IODA variables/groups. Mapping files live alongside test data.
 
-**ODB (ODC)**: Reads ODB-2 files via `odc` library. Uses a **varno system** (variable number codes) to identify observation types. The ODB layout policy maps ODB column names to IODA group/variable paths.
+**ODB (ODC)**: Reads ODB-2 files via `odc` library. Uses a **varno system** (variable number codes) to identify observation types. The ODB layout policy maps ODB column names to IODA group/variable paths. On write (ODC.cpp), missing values are emitted as ODB `Null` rather than a sentinel: detection now recognizes multiple missing conventions (HDF5 fill, IODA missing-value constants, NaN floats) and unifies them on output (#1733).
 
 **ObsStore**: In-memory backend for intermediate processing. No file I/O — data exists only during the run. Used as an intermediate buffer in the reader pipeline.
 
@@ -100,6 +100,8 @@ The `osdf` namespace (`src/containers/`) provides column- and row-oriented data 
 
 **Column metadata with units**: Each OSDF column carries metadata via `osdf::ColumnMetadatum`, which stores the column name, data type, permission, and **units** (string). Units are accessed via `getUnit()`/`setUnit()` on `ColumnMetadatum`, or via `IFrame::getColumnUnits(columnName)`.
 
+**IFrame slicing** (PR #1768): `IFrame::sliceFrame()` virtual overloads (typed comparison on a named column) return a filtered copy as `std::unique_ptr<IFrame>`; implemented by both `FrameCols` and `FrameRows` via private `sliceRowsImpl()` templates. Also, `ObsSpace::put_db` to an OSDF backend is a **no-op for empty data vectors** (PR #1767) instead of calling `setColumn()` with zero rows.
+
 **OSDF writer** (`src/writer/`): The write pipeline has two stages: `collectObs()` (`collect/collectObs.hpp`) gathers observations from all ranks onto designated I/O pool ranks, then `obsWrite()` (`ObsWriter.hpp`) handles the full output pipeline (accepts output parameters, MPI communicator, distribution info, source OSDF frame, statistics, and metadata). Under the hood, `saveObs()` (`save/`) delegates to `saveOsdfToNetcdf()` which writes directly to NetCDF (using netcdf-cxx4, not the HDF5/HH engine). The writer handles Location and Channel dimensions, creates hierarchical group/variable structures matching IODA conventions, sets `_FillValue` and `units` attributes, and supports multi-file output (one file per I/O pool rank). Also handles **empty ObsSpace output**: when no obs survive filtering, `saveOsdfToNetcdf()` still writes a NetCDF file with `Location` dimension of size 0 (recognized on read to reconstruct an empty ObsSpace), so OSDF-only workflows can run without the legacy HDF5 engine fallback.
 
 **Non-destructive save** (PR #1755): `ObsSpace::save(bool preserveDistribution=false)` accepts a flag that flows through `obsWrite(..., preserveInputs=false)` to a new `collectObs` overload (`collect/collectObs.hpp`). When `true`, the writer keeps the caller's `Distribution`, `ObsSourceStats`, and source OSDF frame intact and produces *separate* post-`SelectedRanks`-distribution output objects rather than overwriting in place; cost is the extra memory for the duplicate frame. Default (`false`) preserves the legacy in-place behavior. Use the flag when the in-memory ObsSpace must remain usable after `save()` — e.g., writing mid-cycle diagnostics in OSDF-based workflows.
@@ -107,6 +109,8 @@ The `osdf` namespace (`src/containers/`) provides column- and row-oriented data 
 **OSDF-backed `extendObsSpace`** (PR #1757): `ObsSpace::extendObsSpace()` now works with the OSDF backend. Because `IFrame` has no row-resize API, the OSDF path uses a "companion frame" approach — it builds a separate frame holding the new (extended) rows and `append()`s it to the existing frame, rather than resizing the Location dimension in place. `IFrame::append()` gains an `addOffsetToSourceLocationIndices` flag controlling whether appended source location indices are offset to avoid overlap. The fill logic was factored out of `extendVariable()` into a reusable `fillCompanionLocations()` template shared by the ObsGroup and OSDF backends.
 
 **Channeled-variable Derived-group resolution** (PR #1749): `ObsSpace::groupToUse()` now picks the right group for OSDF-backed channelled variables. When `osdfMetadata_.varHasChannels(fullName)` is true, it tests for the first-channel-suffixed column (`name + "_" + chan0`) when deciding whether to fall back from `DerivedObsValue` → `ObsValue` / `DerivedMetaData` → `MetaData`. The ObsGroup-backed code path is unchanged. Without this, radiance/channelled variables in OSDF ObsSpaces failed Derived-group lookups, which broke `ufo_variabletransforms_btfromradiance` and any similar transform.
+
+**1D Channel-dimensioned variables in OSDF `put_db`/`get_db`** (PR #1773): `ObsSpace::loadVar()`/`saveVar()` now handle Channel-only variables (`dimNames == {"Channel"}`, one value per channel) as a distinct code path from Location×Channel channelled variables (numLocs×numChans, standard `i + j*numChans` index). Channel-only values are broadcast across all rows on write and read back from the first row. Callers select this via a `dim_list` YAML override (see the test harness); without it the value would be mis-shaped as Location-dimensioned.
 
 ## Test Data
 

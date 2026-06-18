@@ -1,6 +1,6 @@
 # IODA (JEDI Interface for Observation Data Access)
 
-> Last updated against commit `3501be56` (2026-06-15). Run `cd bundle/ioda && git log --oneline 3501be56..HEAD` to see what changed since.
+> Last updated against commit `aa392a3f` (2026-06-18). Run `cd bundle/ioda && git log --oneline aa392a3f..HEAD` to see what changed since.
 >
 > **Covers:** ObsSpace, ObsVector, ObsDataVector, Distribution (RoundRobin/Halo/Inefficient), ObsIterator, DistributionUtils (dot_product, missing-value handling), ioda_engines two-layer design, ObsGroup, ObsStore, HDF5/in-memory/ODB/BUFR backends, OSDF containers, Fortran/Python bindings.
 
@@ -111,6 +111,8 @@ The `osdf` namespace (`src/containers/`) provides column- and row-oriented data 
 **Channeled-variable Derived-group resolution** (PR #1749): `ObsSpace::groupToUse()` now picks the right group for OSDF-backed channelled variables. When `osdfMetadata_.varHasChannels(fullName)` is true, it tests for the first-channel-suffixed column (`name + "_" + chan0`) when deciding whether to fall back from `DerivedObsValue` → `ObsValue` / `DerivedMetaData` → `MetaData`. The ObsGroup-backed code path is unchanged. Without this, radiance/channelled variables in OSDF ObsSpaces failed Derived-group lookups, which broke `ufo_variabletransforms_btfromradiance` and any similar transform.
 
 **1D Channel-dimensioned variables in OSDF `put_db`/`get_db`** (PR #1773): `ObsSpace::loadVar()`/`saveVar()` now handle Channel-only variables (`dimNames == {"Channel"}`, one value per channel) as a distinct code path from Location×Channel channelled variables (numLocs×numChans, standard `i + j*numChans` index). Channel-only values are broadcast across all rows on write and read back from the first row. Callers select this via a `dim_list` YAML override (see the test harness); without it the value would be mis-shaped as Location-dimensioned.
+
+**General 2D variables in `FrameMetadata`** (PR #1775): `FrameMetadata` is generalized from channel-specific to **arbitrary named second dimensions** (e.g. `"Channel"`, `"Level"`, `"nfactors"`). The channel-only API is replaced by generic accessors keyed on a dimension name: `setDimNums(dimName, nums)` / `getDimNums(dimName)` / `hasDim(dimName)` / `getDimNames()`, backed by `std::unordered_map<std::string, std::vector<int>> dimNums_` (was `chanNums_` + `varsWithChans_`). New helpers: `varSecondDimName(varName)` (the first non-`Location` dim, or `""` for 1D), and `getMultiSliceVars()` (all vars with any non-`Location` dim). The old channel methods (`setChanNums`/`getChanNums`/`varHasChannels`/`getVarsWithChans`) are retained as thin backward-compat wrappers over `setDimNums("Channel", ...)` (so `getVarsWithChans()` is now *computed* rather than stored), slated for removal in a later "Phase 4". Correspondingly, `OsdfFrameFacade::setTypedIodaVariableValues` swaps its `bool hasChannelAxis` parameter for `const std::string& secondDimName`.
 
 ## Test Data
 

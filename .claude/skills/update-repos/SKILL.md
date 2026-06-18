@@ -51,7 +51,9 @@ The scripts auto-detect the project root from their own location. Override with 
 _(none currently — every source repo in the bundle has a `claude/<repo>.md`)_
 
 **External repos** (sync only, do NOT analyze for doc updates):
-`gsw crtm mpas fv3-jedi-lm`
+`gsw crtm fv3-jedi-lm`
+
+**Permanently skipped** (never sync, never mention): `mpas` — the MPAS core is manage_externals-pinned (always detached HEAD), has no `claude/mpas.md`, and only ever reported `skipped / detached HEAD`. Do not add it to any sync/analyze list and do not report on it.
 
 **Paired data repos** (sync alongside their code repo, never analyzed for doc updates):
 - `ioda` → `ioda-data`
@@ -84,7 +86,7 @@ Each `claude/<repo>.md` has on line 3:
 Call the sync script **once** with the full list of source repos plus any paired data repos for code repos in scope:
 
 ```
-.claude/skills/update-repos/scripts/sync.sh oops ioda ioda-data ufo ufo-data saber vader fv3-jedi fv3-jedi-data mpas-jedi mpas-jedi-data pyiri-jedi jedi-docs soca coupling gsw crtm mpas fv3-jedi-lm
+.claude/skills/update-repos/scripts/sync.sh oops ioda ioda-data ufo ufo-data saber vader fv3-jedi fv3-jedi-data mpas-jedi mpas-jedi-data pyiri-jedi jedi-docs soca coupling gsw crtm fv3-jedi-lm
 ```
 
 Filter the repo list to user-specified repos if any were passed. Whenever a code repo with a paired data repo (`ioda`, `ufo`, `fv3-jedi`, `mpas-jedi`) survives the filter, append its paired data repo to the sync list. If the user explicitly excludes a code repo, drop its data repo too — never sync a data repo on its own.

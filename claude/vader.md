@@ -1,6 +1,6 @@
 # VADER (The VAriable DErivation Repository)
 
-> Last updated against commit `2994fc43` (2026-06-18). Run `cd bundle/vader && git log --oneline 2994fc43..HEAD` to see what changed since.
+> Last updated against commit `d413aa52` (2026-07-01). Run `cd bundle/vader && git log --oneline d413aa52..HEAD` to see what changed since.
 >
 > **Covers:** Vader, RecipeBase, DefaultCookbook, VaderParameters, planVariable algorithm, _A/_B/_C recipe variants, changeVar/changeVarTraj/changeVarTL/changeVarAD, AirTemperature, DryAirDensity, HydrostaticPressure, RelativeHumidity, MoistureControl, Met Office SVP lookup tables (`src/mo/`), DustBin1MassConcentration_A, DustBin2MassConcentration_A, eval_dust_bin_mass_concentration_nl, GSW OceanConversions, adjoint dot-product test pattern, adding a new recipe.
 
@@ -78,17 +78,19 @@ VADER follows JEDI naming standards (from jedi-docs conventions):
 - **`at_surface`** / **`at_2m`** / **`at_10m`** suffixes: surface or near-surface quantities
 - Recipe `_A`, `_B`, `_C` suffixes distinguish different formulas for the same output variable
 
-## Recipe Categories (~57+ recipes)
+## Recipe Categories (~90+ recipes)
 
 **Temperature** (6): AirTemperature (A/B/C), AirVirtualTemperature (A/B), AirPotentialTemperature (A/B)
 
 **Pressure** (13): AirPressure (A/B), AirPressureAtInterface (A/B/C/D), AirPressureThickness, AirPressureExtendedUpByOne, HydrostaticExnerLevels, HydrostaticPressureLevels, LnAirPressure, LnAirPressureAtInterface, SurfaceAirPressure. `AirPressure_B` (→ `air_pressure`, mid-level) and `AirPressureAtInterface_D` (→ `air_pressure_levels`, interface) derive pressure directly from `air_pressure_at_surface` via hybrid-sigma `ak`/`bk` coefficients (`sigma_pressure_hybrid_coordinate_a/b_coefficient`): `ak[k] + bk[k]*ps` at interfaces, layer-averaged for mid-levels. This is a distinct ingredient path from the Phillips interface-based recipes (PR #356).
 
-**Humidity** (8+): WaterVaporMixingRatio variants (dry/wet air, 2m), RelativeHumidity (A — special case, uses lookup tables from `src/mo/`), SaturationVaporPressure, SaturationSpecificHumidity, LogDerivativeSaturationVaporPressure
+**Humidity** (8+): WaterVaporMixingRatio variants (dry/wet air, 2m), RelativeHumidity (A — special case, uses lookup tables from `src/mo/`; B — q/qsat fraction with full TL/AD, PR #332), SaturationVaporPressure (A; B — Murphy-Koop 2005 liquid/ice, TL/AD), SaturationSpecificHumidity (A; B — exact `qsat = 0.622·es/(p − 0.378·es)`, TL/AD), LogDerivativeSaturationVaporPressure
 
 **Clouds** (8): CloudIceMixingRatio (dry/wet, 4 total), CloudLiquidWaterMixingRatio (dry/wet, 4 total)
 
-**Geopotential** (5): GeopotentialHeight, GeopotentialAtInterface, GeopotentialHeightAtInterface, GeopotentialHeightAtSurface, HeightAboveMeanSeaLevelAtSurface
+**Geopotential** (6): GeopotentialHeight (A/B — B is fv3-jedi-compatible, PR #379), GeopotentialLevels (A), GeopotentialHeightLevels (A/B), GeopotentialHeightAtSurface, HeightAboveMeanSeaLevel (A, PR #381), HeightAboveMeanSeaLevelAtSurface. The `*AtInterface` recipes were renamed to `*Levels` (`GeopotentialAtInterface`→`GeopotentialLevels`, `GeopotentialHeightAtInterface`→`GeopotentialHeightLevels`) and the ingredient `surface_geopotential` was renamed to `geopotential_at_surface` (PR #355).
+
+**Ozone** (1): MoleFractionOfOzoneInAir (A) → `mole_fraction_of_ozone_in_air` (PR #377)
 
 **Density** (3): DryAirDensity, DryAirDensityLevelsMinusOne, AirDensityLevelsMinusOne
 
@@ -99,6 +101,8 @@ VADER follows JEDI naming standards (from jedi-docs conventions):
 **Water totals** (5): TotalWater, TotalWaterMixingRatio (dry/wet), TotalRelativeHumidity (2)
 
 **Ocean** (2, requires GSW): SeaWaterTemperature, SeaWaterPotentialTemperature
+
+**CRTM convention** (~30, `src/vader/betaNames_CRTMRecipes/`, all NL-only `_A`, PR #332): recipes producing CRTM-convention variable names for the radiance forward operator — CloudLiquidWater/CloudLiquidIce, Graupel, Hail, RainWater, SnowWater, MassContentOf{CloudIce,CloudLiquidWater,Graupel,Hail,Rain,Snow}InAtmosphereLayer, EffectiveRadiusOf{CloudIce,CloudLiquidWater,Graupel,Hail,Rain,Snow}Particle, SkinTemperature (+ WhereLand/Sea/Ice/Snow area-fraction blends), {Ice,Land,Water}AreaFraction, SurfaceSnowAreaFraction, {Eastward,Northward}WindAtSurface, WindSpeedAtSurface, WindFromDirectionAtSurface, TropopausePressure. These register only via `RecipeMaker` (factory) — `DefaultCookbook.h` is unchanged, so they are factory-available but **not** wired into the default cookbook.
 
 ### TL/AD Support
 
@@ -146,7 +150,8 @@ Key patterns:
 | Directory | Purpose |
 |-----------|---------|
 | `src/vader/` | Core: `vader.h/cc`, `RecipeBase.h/cc`, `DefaultCookbook.h`, `VaderParameters.h` |
-| `src/vader/recipes/` | Core recipe implementations (~47 headers + .cc files) |
+| `src/vader/recipes/` | Core recipe implementations (~50 headers + .cc files) |
+| `src/vader/betaNames_CRTMRecipes/` | ~30 NL-only `_A` recipes producing CRTM-convention variable names (PR #332); `RecipeMaker`-registered only, not in `DefaultCookbook.h` (see CRTM convention category) |
 | `src/mo/` | Met Office integration: lookup tables (SVP), eval functions, constants, Fortran I/O |
 | `src/mo/recipes/` | Met Office-derived recipes (e.g., `DustBin1MassConcentration`, `DustBin2MassConcentration`) |
 | `src/OceanConversions/` | GSW (Gibbs SeaWater) Fortran bindings for ocean recipes |
@@ -168,6 +173,8 @@ adjoint test tolerance: 1.e-12
 ```
 
 Test groups (`vader_recipe_*`, `vader_vader_*`, `vader_planvariable_*`) verify NL correctness, adjoint consistency (dot-product test), and the planning algorithm.
+
+**Inline-data recipe test** (PR #374, `test/vader/RecipeInline.h` + `TestRecipeInline.cc`): an NL-only test family where ingredient and expected-product values are defined directly in the YAML (`columns:` / `expected:` / `nonlinear test tolerance`) on a hard-coded grid, with a single column broadcast to all nodes, rather than read from a NetCDF reference file. Inputs live in `test/testinput/recipe_inline_*.yaml`. Use this for recipes that lack a versioned reference state.
 
 ## Cross-Repo Usage
 

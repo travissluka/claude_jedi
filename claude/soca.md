@@ -1,6 +1,6 @@
 # SOCA (Sea-ice, Ocean, and Coupled Assimilation)
 
-> Last updated against commit `cf904065` (2026-05-28). Run `cd bundle/soca && git log --oneline cf904065..HEAD` to see what changed since.
+> Last updated against commit `2d43d915` (2026-07-01). Run `cd bundle/soca && git log --oneline 2d43d915..HEAD` to see what changed since.
 >
 > **Covers:** soca::Traits, soca::{Geometry,State,Increment,ModelOceanIceEmulator,LinearModelOceanIceEmulator,VariableChange}, ObsLocRossby, SABER SOCA blocks (BkgErrFilt, ParametricOceanStdDev, MLBalance), MOM6 restart format, Icepack sea-ice, KEmul/IceEmul ML emulators, opaque-handle Fortran pattern (F90geom/F90flds/F90iter/F90model/F90bmat), `soca_io_mod` direct-netCDF reader/writer.
 

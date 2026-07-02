@@ -1,6 +1,6 @@
 # IODA (JEDI Interface for Observation Data Access)
 
-> Last updated against commit `aa392a3f` (2026-06-18). Run `cd bundle/ioda && git log --oneline aa392a3f..HEAD` to see what changed since.
+> Last updated against commit `3642586c` (2026-07-01). Run `cd bundle/ioda && git log --oneline 3642586c..HEAD` to see what changed since.
 >
 > **Covers:** ObsSpace, ObsVector, ObsDataVector, Distribution (RoundRobin/Halo/Inefficient), ObsIterator, DistributionUtils (dot_product, missing-value handling), ioda_engines two-layer design, ObsGroup, ObsStore, HDF5/in-memory/ODB/BUFR backends, OSDF containers, Fortran/Python bindings.
 

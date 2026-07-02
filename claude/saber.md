@@ -1,6 +1,6 @@
 # SABER (System for Atmospheric and Boundary Layer Error Representation)
 
-> Last updated against commit `74875a09` (2026-06-10). Run `cd bundle/saber && git log --oneline 74875a09..HEAD` to see what changed since.
+> Last updated against commit `53733622` (2026-07-01). Run `cd bundle/saber && git log --oneline 53733622..HEAD` to see what changed since.
 >
 > **Covers:** SaberCentralBlockBase, SaberOuterBlockBase, SaberParametricBlockChain, SaberEnsembleBlockChain, SaberHybridBlockChain, SaberOuterBlockChain, BUMP_NICAS, Diffusion/DiffusionImpl/DiffusionFilter, FastLAM, Bifourier, SpectralCovariance/Correlation/AnalyticalCorrelation, StdDev, VertLoc, DuplicateVariables, ID, GaussToCS, VaderBlock, TorchBalance, GSIBlockChain, QUENCH testbed, ErrorCovariance<MODEL>, ErrorCovarianceToolbox, ProcessPerts, Localization, multiply/multiplyAD/leftInverseMultiply/multiplySqrt, direct/iterative calibration, dirac tests, CoupledErrorCovariance.
 
@@ -162,7 +162,7 @@ Not a block — a pseudo-model for testing SABER blocks with any ATLAS grid. Imp
 | `VertLocInterp` | Vertical localization with interpolation |
 | `OrographicInterp` | Orographic interpolation |
 | `ShadowLevels` | Extra/shadow level handling |
-| `WriteFields` | Output intermediate fields for debugging |
+| `WriteFields` | Output intermediate fields for debugging; "Wrote file"/"Did NOT write file" messages log to the info stream, not the test stream (PR #1259) |
 | `ResidualFields` | Reads a FieldSet from `input path` (optional `parallel IO`) for filtering; `multiply fset filename` debug output (PR #1244) |
 
 ### `bump/` — BUMP (Background error on Unstructured Mesh Package) — Fortran-heavy
@@ -175,7 +175,7 @@ Key blocks:
 - **`VerticalBalance`** — Vertical balance operator
 - **`StdDev`** (BUMP variant) — Standard deviation from BUMP
 
-C++ wrappers: `BUMP.h`, `NICAS.h`, `type_bump.h`. Extensive configuration via `BUMPParameters.h` (~29KB) covering: general settings, I/O, drivers (correlation/localization/balance/moments/diagnostics), sampling, and output.
+C++ wrappers: `BUMP.h`, `NICAS.h`, `type_bump.h`. Extensive configuration via `BUMPParameters.h` (~29KB) covering: general settings, I/O, drivers (correlation/localization/balance/moments/diagnostics), sampling, and output. The `drivers: write diagnostics in yaml` flag (default false, PR #1203) emits `<prefix>diag.yaml` with per-group ensemble correlation, localization, and hybrid-coefficient profiles.
 
 ### `bifourier/` — Spectral covariance via bidirectional Fourier (requires FFTW or ECTRANS)
 

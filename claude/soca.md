@@ -1,8 +1,8 @@
 # SOCA (Sea-ice, Ocean, and Coupled Assimilation)
 
-> Last updated against commit `2d43d915` (2026-07-01). Run `cd bundle/soca && git log --oneline 2d43d915..HEAD` to see what changed since.
+> Last updated against commit `016a6a93` (2026-07-20). Run `cd bundle/soca && git log --oneline 016a6a93..HEAD` to see what changed since.
 >
-> **Covers:** soca::Traits, soca::{Geometry,State,Increment,ModelOceanIceEmulator,LinearModelOceanIceEmulator,VariableChange}, ObsLocRossby, SABER SOCA blocks (BkgErrFilt, ParametricOceanStdDev, MLBalance), MOM6 restart format, Icepack sea-ice, KEmul/IceEmul ML emulators, opaque-handle Fortran pattern (F90geom/F90flds/F90iter/F90model/F90bmat), `soca_io_mod` direct-netCDF reader/writer.
+> **Covers:** soca::Traits, soca::{Geometry,State,Increment,ModelOceanIceEmulator,LinearModelOceanIceEmulator,VariableChange}, ObsLocRossby, SABER SOCA blocks (BkgErrFilt, ParametricOceanStdDev, MLBalance), MOM6 restart format, Icepack sea-ice, KEmul/IceEmul ML emulators, opaque-handle Fortran pattern (F90geom/F90flds/F90iter/F90model/F90bmat), `soca_io_mod` direct-netCDF reader/writer, `soca_write_jacobian_mod` balance-Jacobian dump.
 
 ## Overview
 
@@ -96,6 +96,8 @@ VADER is used for generic transforms before falling back to soca-specific ones.
 | `"BalanceSOCA"` | `Balance` | Linearized balance equation (T/S → SSH coupling) |
 | `"LinearModel2GeoVaLs"` (also `"default"`) | `LinearModel2GeoVaLs` | TL/AD version of Model2GeoVaLs; also the factory fallback |
 
+`Balance` can optionally dump its Kst (T→S) and Ksshts (T/S→SSH) Jacobians to NetCDF via new YAML keys `kst.jacobian_output.filename` and `ksshts.jacobian_output.filename`, written through the new `soca_write_jacobian_mod` (`write_jacobian_to_netcdf`, layered on `soca_io_writer`) — PR #1218.
+
 ### SABER Blocks
 
 Three custom SABER outer blocks for background error covariance:
@@ -111,6 +113,8 @@ These are used in SABER outer block chains for ocean error covariance modeling.
 ### Obs Localization (`ObsLocalization/`)
 
 `ObsLocRossby` — custom localization registered as `"Rossby"`. Inherits from `ufo::ObsHorLocGC99<GeometryIterator>` and adds `mult * rossby_radius` (read from the geometry iterator's `rossby_radius` field) to the configured Gaspari-Cohn lengthscale, so localization grows in low-latitude / deep-ocean regions.
+
+Configured under `obs localizations:` with `localization method: Rossby` and params `base value`, `rossby mult`, `min grid mult`, `min value`, `max value` (see `src/soca/ObsLocalization/README.md`, PR #1238). The realized scale is `L = base value + rossby mult · rossby_radius`, floored by `min grid mult · sqrt(cell area)`, clamped to `[min value, max value]`, then converted to a Gaspari-Cohn (GC99) cutoff as `L · 2 / sqrt(0.3)`. Works only with LETKF/GETKF ensemble solvers — it aborts under the sequential/EAKF solvers, and obs-obs localization is unsupported.
 
 ## Fortran Interop
 

@@ -1,6 +1,6 @@
 # SABER (System for Atmospheric and Boundary Layer Error Representation)
 
-> Last updated against commit `53733622` (2026-07-01). Run `cd bundle/saber && git log --oneline 53733622..HEAD` to see what changed since.
+> Last updated against commit `a8e8e1d8` (2026-07-23). Run `cd bundle/saber && git log --oneline a8e8e1d8..HEAD` to see what changed since.
 >
 > **Covers:** SaberCentralBlockBase, SaberOuterBlockBase, SaberParametricBlockChain, SaberEnsembleBlockChain, SaberHybridBlockChain, SaberOuterBlockChain, BUMP_NICAS, Diffusion/DiffusionImpl/DiffusionFilter, FastLAM, Bifourier, SpectralCovariance/Correlation/AnalyticalCorrelation, StdDev, VertLoc, DuplicateVariables, ID, GaussToCS, VaderBlock, TorchBalance, GSIBlockChain, QUENCH testbed, ErrorCovariance<MODEL>, ErrorCovarianceToolbox, ProcessPerts, Localization, multiply/multiplyAD/leftInverseMultiply/multiplySqrt, direct/iterative calibration, dirac tests, CoupledErrorCovariance.
 
@@ -162,8 +162,8 @@ Not a block — a pseudo-model for testing SABER blocks with any ATLAS grid. Imp
 | `VertLocInterp` | Vertical localization with interpolation |
 | `OrographicInterp` | Orographic interpolation |
 | `ShadowLevels` | Extra/shadow level handling |
-| `WriteFields` | Output intermediate fields for debugging; "Wrote file"/"Did NOT write file" messages log to the info stream, not the test stream (PR #1259) |
-| `ResidualFields` | Reads a FieldSet from `input path` (optional `parallel IO`) for filtering; `multiply fset filename` debug output (PR #1244) |
+| `WriteFields` | Output intermediate fields for debugging; "Wrote file"/"Did NOT write file" messages log to the info stream, not the test stream (PR #1259). Uses `functionSpace().grid().name()` for the grid name under `ATLAS_VERSION_46_OR_GREATER` parallel IO (PR #1263) |
+| `ResidualFields` | Reads a FieldSet from `input path` (optional `parallel IO`) for filtering; `multiply fset filename` debug output (PR #1244); same grid-name handling for parallel IO (PR #1263) |
 
 ### `bump/` — BUMP (Background error on Unstructured Mesh Package) — Fortran-heavy
 
@@ -176,6 +176,8 @@ Key blocks:
 - **`StdDev`** (BUMP variant) — Standard deviation from BUMP
 
 C++ wrappers: `BUMP.h`, `NICAS.h`, `type_bump.h`. Extensive configuration via `BUMPParameters.h` (~29KB) covering: general settings, I/O, drivers (correlation/localization/balance/moments/diagnostics), sampling, and output. The `drivers: write diagnostics in yaml` flag (default false, PR #1203) emits `<prefix>diag.yaml` with per-group ensemble correlation, localization, and hybrid-coefficient profiles.
+
+BUMP's registry now uses the shared `oops::util::linkedList_i.f`/`linkedList_c.f` (`registry_t`) instead of its own bespoke `tools_linkedlist_{interface,implementation}.fypp` (deleted, PR #1277) — the same pattern GSI already used. `registry%init()` dropped its `f_comm` argument in the switch.
 
 ### `bifourier/` — Spectral covariance via bidirectional Fourier (requires FFTW or ECTRANS)
 
@@ -195,6 +197,8 @@ The biperiodization step's `inner partitioner` YAML key is **optional** (PR #125
 ### `fastlam/` — Fast Limited Area Model correlation (requires FFTW)
 
 Main block: `FastLAM` (59KB impl). Layer types: `LayerSpec` (spectral), `LayerHalo`, `LayerRC` (regional covariance). Supports iterative calibration. As of PR #1176, square-root-based central blocks (incl. FastLAM) route randomization through a new `randomCtlVec(field, member)` virtual rather than overriding `randomize`/`multiply` directly; `randomize`/`multiply` are no longer pure-virtual on `SaberCentralBlockBase` (base defaults provided); FastLAM caches `ctlVecSize_`. Backed by the internal `saber/util/Randomization` helper (`util::randomCtlVec`). PR #1248 added a `"duplicated and weighted"` multivariate strategy (alongside `"duplicated"`/`"crossed"`) with weighted cross-variable correlations, plus YAML params `sampling horizontal length-scale`, `sampling vertical length-scale`, `inner grid-point function space from background variable`, `default off-diagonal weight`, and `specific off-diagonal weights`; internally the reduction-factor getters (`rfh`/`rfv`) gave way to sampling length-scales (`srh`/`srv`) and explicit grid dims (`nx`/`ny`/`nz`).
+
+PR #1257 fixed the `srh`/`srv` sampling length-scale calculation: `srh` now normalizes via the average of `1/minCellSize + 1/maxCellSize` (was a straight average of the cell sizes), and `srv` (when positive) is now rescaled through the same thickness-normalization used for `rv` rather than copied raw from YAML. `"duplicated and weighted"` handling was also extended into `setupCtlVecSize`/`setupGlbIndex` (previously only `"univariate"`/`"duplicated"` were handled there). Vertical convolution/normalization in `LayerHalo`/`LayerRC`/`LayerSpec` is now gated on `zKernelSize_ > 1`, not just `nz_ > 1`.
 
 ### `diffusion/` — Diffusion localization, explicit + implicit vertical (C++ only)
 
@@ -226,11 +230,11 @@ vertical:
 
 ### `gsi/` — GSI (Gridpoint Statistical Interpolation) covariance
 
-`GSIBlockChain` wraps GSI Fortran backend via linked-list pattern. Requires `gsibec` library. Supports regional fv3-jedi and mpas-jedi analyses via the `regional mode: true` YAML flag (`GSIParameters.h`); the regional path uses 2D `lats2`/`lons2` arrays in `gsi_grid_mod.f90` for non-separable grids. Field-name resolver in `gsi_covariance_mod.f90` maps `prsl ↔ air_pressure` alongside the existing `ts ↔ sst` mapping.
+`GSIBlockChain` wraps GSI Fortran backend via linked-list pattern. Requires `gsibec` library. Supports regional fv3-jedi and mpas-jedi analyses via the `regional mode: true` YAML flag (`GSIParameters.h`); the regional path uses 2D `lats2`/`lons2` arrays in `gsi_grid_mod.f90` for non-separable grids. Field-name resolver in `gsi_covariance_mod.f90` maps `prsl ↔ air_pressure` alongside the existing `ts ↔ sst` mapping; the surface-geopotential (`phis`) lookup now matches `geopotential_at_surface` (was `geopotential_height_times_gravity_at_surface`, following the vader/fv3-jedi rename).
 
 ### `interpolation/` — Grid interpolation blocks
 
-`Interpolation`, `GaussToCS` (Gaussian→cubed-sphere), `Rescaling`, `VertProj` (vertical projection). Uses ATLAS interpolation wrappers. SMV variants `GaussToCSWithSMV` (here) and `GaussUVToGPWithSMV` (`spectralb/`), via `SMVInterpWrapper`, use the ATLAS ≥0.46 spherical-mean-value interpolator (saber#1241; gated by `ATLAS_VERSION_46_OR_GREATER`, the renamed `ATLAS_SCOPE_ISSUE_RESOLVED`) for better-conditioned Gauss↔cubed-sphere inverse transforms via redistribution. `setupGsiMatchingGrid` (`Geometry.cc`) accepts `type: rotated_lonlat` (alongside `gaussian` and `latlon`); requires `lat_start`/`lat_end`/`lon_start`/`lon_end`/`north_pole_lat`/`north_pole_lon` YAML keys and builds an ATLAS `StructuredGrid` with a rotated-lonlat projection — used to wire regional fv3/mpas analyses to GSIbec.
+`Interpolation`, `GaussToCS` (Gaussian→cubed-sphere), `Rescaling`, `VertProj` (vertical projection). Uses ATLAS interpolation wrappers. SMV variants `GaussToCSWithSMV` (here) and `GaussUVToGPWithSMV` (`spectralb/`), via `SMVInterpWrapper`, use the ATLAS ≥0.46 spherical-mean-value interpolator (saber#1241; gated by `ATLAS_VERSION_46_OR_GREATER`, the renamed `ATLAS_SCOPE_ISSUE_RESOLVED`) for better-conditioned Gauss↔cubed-sphere inverse transforms via redistribution. `setupGsiMatchingGrid` was moved out of `Geometry.cc` into the new standalone `interpolation/GsiGrid.{cc,h}` (PR #1260) so it can be called outside saber; it now exposes `GsiGridKey`/`GsiPartitionerKey` and `computeS2NCheckerboardPartition` (a south-to-north GSI-matching MPI checkerboard partition). It accepts `type: rotated_lonlat` (alongside `gaussian` and `latlon`); requires `lat_start`/`lat_end`/`lon_start`/`lon_end`/`north_pole_lat`/`north_pole_lon` YAML keys and builds an ATLAS `StructuredGrid` with a rotated-lonlat projection — used to wire regional fv3/mpas analyses to GSIbec.
 
 ### `coupled/` — Block-diagonal coupled covariance (C++ only)
 
@@ -337,9 +341,9 @@ Blocks support multiple calibration strategies:
 
 `TorchBalance` outer block. Loads pre-trained TorchScript emulators that compute Jacobians between variables (e.g., ∂SST/∂air_temperature). At initialization, calls each emulator's `jac_physical(inputs, mask)` method on the trajectory to compute per-grid-point Jacobian fields. `multiply()` applies `Δoutput += Σ (∂output/∂input_j) × Δinput_j`; `multiplyAD()` applies the transpose. Supports optional masking (e.g., land/ice fraction). Generalization of soca's `MLBalance` — same concept but fully configurable for any variables.
 
-Key classes: `TorchBalance` (SABER block), `TorchBalanceEmulator` (TorchScript model wrapper). Training is external to JEDI; `create_test_emulator.py` shows the required model interface.
+Key classes: `TorchBalance` (SABER block), `TorchBalanceSurfaceEmulator` (surface TorchScript wrapper, `setupSurfaceEmulator`; renamed from `TorchBalanceEmulator` in PR #1247) and `TorchBalanceVerticalEmulator` (`setupVerticalEmulator`, PR #1247). The vertical emulator handles full-column input profiles and emits a compact vertical-block Jacobian; per-level counts are inferred from the Atlas field shapes, so the TorchScript model needs no explicit level attributes. Training is external to JEDI; `create_test_emulator.py` shows the required model interface.
 
-Config:
+Config: `surface emulators:` and `vertical emulators:` are both optional lists under the block.
 ```yaml
 saber outer blocks:
   - saber block name: TorchBalance
@@ -350,6 +354,10 @@ saber outer blocks:
         jacobian masking:
           variable: land_ice_area_fraction
           level: 0
+    vertical emulators:
+      - name: air_temperature
+        path: ./model_vert.ts
+        jacobian wrt: [var1, var2]
 ```
 
 ## Testing Patterns

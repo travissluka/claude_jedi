@@ -1,6 +1,6 @@
 # OOPS (Object Oriented Prediction System)
 
-> Last updated against commit `2169473f` (2026-07-01). Run `cd bundle/oops && git log --oneline 2169473f..HEAD` to see what changed since.
+> Last updated against commit `0763e367` (2026-07-23). Run `cd bundle/oops && git log --oneline 0763e367..HEAD` to see what changed since.
 >
 > **Covers:** Variational, CostFunction, CostFct3DVar/3DFGAT/4DVar/WC4DVar/4DEnsVar, CostJo, CostJb3D/4D/Jq, Minimizer (PCG/DRPCG/FGMRES/RPCG/...), LocalEnsembleSolver, LETKF/GETKF (Deterministic/Stochastic), SequentialEnsembleSolver/EAKF, LocalEnsembleDA, Observer, Observers, Variables, FieldSet3D/4D, FieldSets, IncrementSet, StateSet, GeometryData, PseudoModel, CommRedistribution, CommRedistributionRepository, FieldSetSubCommunicators, Application runs (Forecast/HofX/EDA/GenEnsPertB/...), inflation (RTPP/RTPS/mult), cross-validation, Nerger regulation, implicit/explicit Diffusion, L95/QG toy models.
 
@@ -76,7 +76,13 @@ LETKF and GETKF derive from `LocalEnsembleSolver` (iterate over grid points, sol
 
 When QC filters reject observations only for some ensemble members, that rejection is propagated to all members of the ensemble: `LocalEnsembleSolver::applyAssimilatedMask` (overload taking `Observations_`) and `GETKFSolver::computeHofX` now call `updateAssimilatedMask` to ensure the assimilated mask matches between the ensemble-mean H(x), every modulated `HZb`, and the nonlinear `Yb` member H(x) values (PR #3231).
 
-EAKF derives from `SequentialEnsembleSolver` (iterate over observations, update one obs at a time against all model state points within localization radius). Uses the new scalar `ObsLocalization::computeLocalization(Point3, Point3) → double` (0.0–1.0) interface to evaluate point-to-point localization for each obs/state pair. The protected `obsEnsembleUpdate` hook that derived solvers override now takes/returns `Eigen::VectorXd` for both arguments (was `VectorXf`): double precision is the contract, no float cast. `SequentialEnsembleSolver` wires in inflation matching LETKF semantics, prior `mult` (applied as sqrt on Xa/yb) and posterior `rtpp`/`rtps`, plus a no-obs early-exit (analysis = background). Tested with `sequential_enkf` (L95, QG) and `sequential_enkf_noobs`.
+EAKF derives from `SequentialEnsembleSolver` (iterate over observations, update one obs at a time against all model state points within localization radius). Uses the new scalar `ObsLocalization::computeLocalization(Point3, Point3) → double` (0.0–1.0) interface to evaluate point-to-point localization for each obs/state pair; both points now carry a real vertical coordinate (via ioda's `iterator vertical coordinate` YAML key, PR #3295) — but `measurementUpdate` currently has a TODO noting there's no check that the geometry-iterator and obs-iterator vertical coordinate systems are actually compatible (e.g. pressure vs. height), so mixed-coordinate localization configs can silently produce nonsense. The protected `obsEnsembleUpdate` hook that derived solvers override now takes/returns `Eigen::VectorXd` for both arguments (was `VectorXf`): double precision is the contract, no float cast. `SequentialEnsembleSolver` wires in inflation matching LETKF semantics, prior `mult` (applied as sqrt on Xa/yb) and posterior `rtpp`/`rtps`, plus a no-obs early-exit (analysis = background). Tested with `sequential_enkf` (L95, QG) and `sequential_enkf_noobs`.
+
+`DeparturesEnsemble::packEigen()` (`base/DeparturesEnsemble.h`) now caches the member-0 `Departures` (`dep0_`) instead of reconstructing/deserializing it on every call, cutting redundant work in the sequential solver's per-gridpoint/per-obs inner loop (PR #3337); invalidated when member 0 is re-set.
+
+Optional online **Degrees-of-Freedom-for-Signal (DFS)** estimator for LETKF/ETKF (`assimilation/DFSCalculator.h`, PR #3070, Hu et al. 2025): enabled via `local ensemble DA.dfs: true`. Computes per-obs DFS from the analysis weights (`diag((Wa·Yb)ᵀ(Wa·Yb)) ⊙ invR / (nens-1)`), logs per-block means, and writes a per-obs `DFS` variable to the obspace netCDF. Wired into `LocalEnsembleSolver` (ctor + `measurementUpdate`) and `DeterministicLETKF::measurementUpdate`. Single-task only: throws `NotImplemented` under MPI-distributed obs.
+
+The `obs localizations` YAML subsection is now optional in `ObsLocalizations` (PR #3287): absent config yields an empty localization set rather than an error.
 
 ## Cost Functions (5 total)
 

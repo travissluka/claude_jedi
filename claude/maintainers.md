@@ -1,6 +1,6 @@
 # Repo Maintainers
 
-> Snapshot taken 2026-04-28 from `JCSDA-internal/github-admin` repo, file `tf/configuration.tf`.
+> Snapshot taken 2026-07-22 from `JCSDA-internal/github-admin` repo, file `tf/configuration.tf`.
 >
 > **Covers:** maintainer/admin GitHub handles per bundle repo. Use this to know who to ping when a PR sits without review or who can force-merge / override branch protection.
 
@@ -14,6 +14,8 @@ gh api repos/JCSDA-internal/github-admin/contents/tf/configuration.tf | \
 ```
 
 In that file, **`maintainers`** is the list of GitHub handles with maintainer-level permission on the repo (can approve PRs, can merge, can manage settings under `repository_profile`). **`admin_users`** is reserved for special cases (the comment says "DO NOT USE THIS" for normal repos) and appears mainly on UKMO-hosted repos. **`write_teams`** grants commit access to whole GitHub teams (not individuals).
+
+**Org owners are not in this file.** GitHub org-owner role sits above the per-repo terraform grants, so org owners hold admin (force-merge, override branch protection) on *every* JCSDA-internal repo regardless of its `maintainers` list. **ytremolet (Yannick Tremolet)** is an org owner, so he can merge any bundle repo even where he is not listed as a maintainer (e.g. ioda, ufo). Treat this list as the repo-scoped grants only; for a hard override, an org owner is always an option.
 
 To re-snapshot this doc: re-run `/update-repos` (the skill refreshes from terraform when it runs).
 
@@ -33,7 +35,7 @@ Sorted in build-dependency order.
 | `fv3-jedi` | `fv3-jedi` | fmahebert, danholdaway, rtodling, cmgas | (jedi via JEDI profile) |
 | `soca` | `soca` | shlyaeva, Dooruk | soca |
 | `mpas` | `MPAS-Model` | liujake, byoung-joo, svahl991 | (jedi via JEDI profile) |
-| `mpas-jedi` | `mpas-jedi` | liujake, byoung-joo, svahl991, fmahebert, BenjaminRuston | (jedi via JEDI profile) |
+| `mpas-jedi` | `mpas-jedi` | jim-p-w, byoung-joo, ibanos90, junmeiban, svahl991, fmahebert, BenjaminRuston | (jedi via JEDI profile) |
 | `coupling` | `coupling` | fmahebert, travissluka | (jedi via JEDI profile) |
 | `pyiri-jedi` | `pyiri-jedi` | climbfuji, fmahebert, huishao-r, BenjaminRuston, ncrossette | navy, jedi |
 | `jedi-docs` | `jedi-docs` | ashley314, cmgas, ncrossette | jedi |
@@ -48,7 +50,7 @@ The bundle itself (`jedi-bundle`) is maintained by **fmahebert, eap, ytremolet**
 | `ioda-data` | srherbener, fmahebert |
 | `ufo-data` | BenjaminTJohnson, BenjaminRuston, fmahebert, srherbener, fcvdb, huishao-r, mikecooke77 |
 | `fv3-jedi-data` | fmahebert, danholdaway, rtodling, cmgas |
-| `mpas-jedi-data` | liujake, byoung-joo, svahl991, fmahebert, BenjaminRuston |
+| `mpas-jedi-data` | jim-p-w, byoung-joo, ibanos90, junmeiban, svahl991, fmahebert, BenjaminRuston |
 | `jedi-model-data` | svahl991, fmahebert, danholdaway, MarekWlasak, ncrossette |
 | `soca-data` | shlyaeva, Dooruk, danholdaway |
 

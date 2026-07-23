@@ -1,6 +1,6 @@
 # FV3-JEDI
 
-> Last updated against commit `711f352a` (2026-07-01). Run `cd bundle/fv3-jedi && git log --oneline 711f352a..HEAD` to see what changed since.
+> Last updated against commit `75efc558` (2026-07-23). Run `cd bundle/fv3-jedi && git log --oneline 75efc558..HEAD` to see what changed since.
 >
 > **Covers:** fv3jedi::Traits, fv3jedi::{Geometry,State,Increment,Model,LinearModel,VariableChange,LinearVariableChange,ModelBias,ModelData}, FV3_FORECAST_MODEL backends (GEOS/UFS/FV3CORE), cubed-sphere geometry, LAM support, FV3LM linear model, GFS/GEOS I/O backends, FV3-JEDI/FMS interop, opaque-handle Fortran pattern, VertRemap (lapse-rate vertical remap after horizontal interpolation).
 
@@ -42,7 +42,9 @@ Hold variables at a datetime via ATLAS FieldSet. State supports `read()`, `write
 When `geom.doVerticalRemapping()` is true, `State::changeResolution()` invokes `fv3jedi::VertRemap` after horizontal interpolation; this requires `surface_geopotential_height` to be present in the target geometry's fields.
 
 ### Fields & FieldMetadata (`Fields/`, `FieldMetadata/`)
-`FieldsMetadata` describes each field: long name, levels, data kind (R4/R8), tracer flag, units, mathematical space. `FieldsMetadataDefault.h` provides defaults for GEOS/GFS, including `ln_air_pressure` (full-levels; consumed by VertRemap via the Vader `LnAirPressure_A` recipe).
+`FieldsMetadata` describes each field: long name, levels, data kind (R4/R8), tracer flag, units, mathematical space. `FieldsMetadataDefault.h` provides defaults for GEOS/GFS, including `ln_air_pressure` (full-levels; consumed by VertRemap via the Vader `LnAirPressure_A` recipe). PR #1523 added soil-analysis metadata fields (`soilt1-4`, `soill1-3`, `soilw1-4`, plus a `soil14` entry — likely meant `soill4`) and a 2m specific-humidity field (`specfic_humidity_at_2m` — also a typo, for "specific"); both typos are now on-disk long-name strings that YAML/obs-op code must match verbatim.
+
+PR #1521 (sprint-branch rename) changed `geopotential_height_times_gravity_at_surface` → `geopotential_at_surface` and `f10m`/`wind_reduction_factor_at_10m` → `ratio_of_wind_at_surface_adjacent_layer_to_wind_at_10m`, propagated through `State.cc`, `Model2GeoVaLs`, and the GEOS/FV3LM Fortran call sites (`surface_geopotential_height`, used by VertRemap, is a distinct field and was not renamed). The same PR added duplicate physical-constant aliases in `Utilities/Constants.cc` for Vader-name compatibility (`standard_gravitational_acceleration`, `gas_constant_of_dry_air`, `ozone_mixing_ratio_conversion_factor` — same values as the existing `grav`/`rdry`/`constoz`, just alternate lookup keys).
 
 ### Model (`Model/`)
 `ModelWrapper` dispatches to concrete implementations via factory:

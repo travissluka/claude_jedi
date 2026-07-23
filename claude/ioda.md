@@ -1,6 +1,6 @@
 # IODA (JEDI Interface for Observation Data Access)
 
-> Last updated against commit `3642586c` (2026-07-01). Run `cd bundle/ioda && git log --oneline 3642586c..HEAD` to see what changed since.
+> Last updated against commit `2398915e` (2026-07-23). Run `cd bundle/ioda && git log --oneline 2398915e..HEAD` to see what changed since.
 >
 > **Covers:** ObsSpace, ObsVector, ObsDataVector, Distribution (RoundRobin/Halo/Inefficient), ObsIterator, DistributionUtils (dot_product, missing-value handling), ioda_engines two-layer design, ObsGroup, ObsStore, HDF5/in-memory/ODB/BUFR backends, OSDF containers, Fortran/Python bindings.
 
@@ -36,7 +36,7 @@ Reader/Writer factory pattern: `ReaderBase`/`WriterBase` with `ReaderFactory`/`W
 
 **`ioda`** (`src/`) — Higher-level JEDI/oops interface:
 - `ioda::ObsSpace` — main class; extends `oops::ObsSpaceBase`; manages the full lifecycle of obs data in a DA run (read on construction, optional write on destruction). Exposes `begin()`/`end()` returning `ioda::ObsIterator` for location-based traversal. Supports continuous/cycling DA via `updateObsSpace(cdaConfig)`: shifts the time window forward, appends a new obs directory, and drops obs falling outside the shifted window via `reduce()`. Attached `ObsSpaceAssociated` consumers (`ObsVector`, `ObsDataVector<T>`) stay in sync through `attach()` plus the `reduce()`/`append()`/`syncAppend()` virtuals.
-- `ioda::ObsIterator` — forward iterator over obs locations; dereferences to `eckit::geometry::Point3(lon, lat, 0)`. Aliased as `IodaTrait::GeometryIterator`.
+- `ioda::ObsIterator` — forward iterator over obs locations; dereferences to `eckit::geometry::Point3(lon, lat, z)`. `z` defaults to `0` but is read from `MetaData/<verticalCoordinate>` when the obs space's `iterator vertical coordinate` YAML key names a variable — enables 3D (vertical) localization for the sequential EnKF/EAKF solver via `GeometryIterator` (PR #1734). `ObsSpace::verticalCoordinate()` exposes the configured name as `boost::optional<std::string>`. Aliased as `IodaTrait::GeometryIterator`.
 - `ioda::ObsVector` — observation vector for DA algorithms
 - `ioda::ObsDataVector<T>` — templated obs data container
 - `ioda::Distribution` (`src/distribution/`) — MPI distribution strategies: `RoundRobin`, `Halo`, `InefficientDistribution`, etc.
@@ -112,7 +112,9 @@ The `osdf` namespace (`src/containers/`) provides column- and row-oriented data 
 
 **1D Channel-dimensioned variables in OSDF `put_db`/`get_db`** (PR #1773): `ObsSpace::loadVar()`/`saveVar()` now handle Channel-only variables (`dimNames == {"Channel"}`, one value per channel) as a distinct code path from Location×Channel channelled variables (numLocs×numChans, standard `i + j*numChans` index). Channel-only values are broadcast across all rows on write and read back from the first row. Callers select this via a `dim_list` YAML override (see the test harness); without it the value would be mis-shaped as Location-dimensioned.
 
-**General 2D variables in `FrameMetadata`** (PR #1775): `FrameMetadata` is generalized from channel-specific to **arbitrary named second dimensions** (e.g. `"Channel"`, `"Level"`, `"nfactors"`). The channel-only API is replaced by generic accessors keyed on a dimension name: `setDimNums(dimName, nums)` / `getDimNums(dimName)` / `hasDim(dimName)` / `getDimNames()`, backed by `std::unordered_map<std::string, std::vector<int>> dimNums_` (was `chanNums_` + `varsWithChans_`). New helpers: `varSecondDimName(varName)` (the first non-`Location` dim, or `""` for 1D), and `getMultiSliceVars()` (all vars with any non-`Location` dim). The old channel methods (`setChanNums`/`getChanNums`/`varHasChannels`/`getVarsWithChans`) are retained as thin backward-compat wrappers over `setDimNums("Channel", ...)` (so `getVarsWithChans()` is now *computed* rather than stored), slated for removal in a later "Phase 4". Correspondingly, `OsdfFrameFacade::setTypedIodaVariableValues` swaps its `bool hasChannelAxis` parameter for `const std::string& secondDimName`.
+**General 2D variables in `FrameMetadata`** (PR #1775): `FrameMetadata` is generalized from channel-specific to **arbitrary named second dimensions** (e.g. `"Channel"`, `"Level"`, `"nfactors"`). The channel-only API is replaced by generic accessors keyed on a dimension name: `setDimNums(dimName, nums)` / `getDimNums(dimName)` / `hasDim(dimName)` / `getDimNames()`, backed by `std::unordered_map<std::string, std::vector<int>> dimNums_` (was `chanNums_` + `varsWithChans_`). New helpers: `varSliceDimName(varName)` (the first non-`Location` dim, or `""` for 1D), and `getMultiSliceVars()` (all vars with any non-`Location` dim). Terminology throughout is now "slice dimension" rather than "second dimension". As of the phase-4 completion (PR #1779) the old channel-specific backward-compat wrappers (`setChanNums`/`getChanNums`/`varHasChannels`/`getVarsWithChans`) are **removed**; callers use the generic `setDimNums`/`getDimNums`/`hasDim`/`getDimNames` API directly. Correspondingly, `OsdfFrameFacade::setTypedIodaVariableValues` takes `const std::string& sliceDimName` in place of the old `bool hasChannelAxis`. Matching renames landed in `ObsSpace`: `chanSelect`→`sliceSelect`, `createChannelSelections`→`createSliceSelections`, `splitChanSuffix`→`splitSliceSuffix` (affects `get_db`/`loadVar` signatures); OSDF trailing-numeric-suffix handling is now aligned with `ObsGroup` behavior (PR #1794).
+
+**Generator backends + type coercion in OSDF** (PRs #1784, #1791, #1797, #1792, #1801, #1804): the OSDF reader can now drive the in-memory `Generate.List`/`Generate.Random` backends. `reader/load/loadObsFromGenerators.{cpp,hpp}` (with `storeGenDataInFrame.{cpp,hpp}`) load generated obs into OSDF frames, sharing a container-agnostic `Engines::GeneratedObsData` / `generateObsList` / `generateObsRandom` refactor in `EngineUtils`; `loadObs`/`obsRead` gained `obsVarNames` + `timeWindow` arguments. `containers/FrameUtils.h` adds missing-value-aware `coerce<T,S>` / `withCoercionType` type coercion for `getColumn`/`setColumn` (PR #1791). Robustness fixes: `_FillValue` re-read directly from the variable's attribute map (#1797), float dimension coordinates allowed in the OSDF netCDF reader (#1792), inf/nan values handled on ingest (#1801), and `ObsSpace::dtype` fixed for the OSDF datetime-column case (#1804). (An OSDF ODB writer #1774 was added then reverted #1798 — net no change.)
 
 ## Test Data
 
@@ -141,6 +143,7 @@ obs space:
     # empty obs space action: "skip output"  # or "create output" (default)
   simulated variables: [airTemperature, windEastward]
   observed variables: [airTemperature, windEastward]
+  # iterator vertical coordinate: pressure   # optional: enables 3D obs-iterator localization
   obsgrouping:                    # Optional: group obs into records
     group variables: [stationIdentification]
     sort variable: pressure       # Sort within groups

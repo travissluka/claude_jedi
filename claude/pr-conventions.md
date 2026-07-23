@@ -123,7 +123,7 @@ Put `build-group=` lines inside the `## Dependencies` section, separated from th
 
 ## Draft as a CI deferral
 
-**CI does not fire on Draft PRs by default.** This is useful beyond circular deps: when one PR's CI would fail until a companion PR exists with a known URL (e.g., a testref refresh that depends on an upstream behavior change), open the dependent PR as Draft *first*, get its URL, then open the upstream PR as Ready with `build-group=<draft PR url>`. The upstream's CI fires immediately and pulls in the draft's branch via the resolver. Only flip the dependent PR out of Draft *after* the upstream is green — exiting Draft fires CI on the dependent PR.
+**CI does not fire on Draft PRs by default.** This is useful beyond circular deps: when one PR's CI would fail until a companion PR exists with a known URL (e.g., a testref refresh that depends on an upstream behavior change), open the dependent PR as Draft *first*, get its URL, then open the upstream PR as Ready with `build-group=<draft PR url>`. The upstream's CI fires immediately and pulls in the draft's branch via the resolver. Only flip the dependent PR out of Draft *after* the upstream is green. **Exiting Draft does not fire CI** — follow the flip with an empty "trigger ci" commit (see "Re-triggering CI").
 
 Worked example for a 2-PR upstream/downstream pair where the downstream is a testref refresh (e.g., oops EAKF bug fix + soca testref companion):
 
@@ -131,7 +131,7 @@ Worked example for a 2-PR upstream/downstream pair where the downstream is a tes
 2. Create upstream PR (e.g., oops) **as Ready** with `build-group=<downstream PR url>` (URL now known from step 1). Upstream CI runs immediately, pulling the Draft downstream branch via the resolver.
 3. Edit downstream PR body to fill in the real upstream URL. Still Draft, still no CI.
 4. Wait for upstream CI to be green.
-5. Flip downstream out of Draft. Exiting Draft fires its CI; bundle includes the upstream branch via build-group → both green.
+5. Flip downstream out of Draft, then push an empty "trigger ci" commit to fire its CI (the flip alone does not). Bundle includes the upstream branch via build-group → both green.
 6. Merge upstream first, downstream second. Remove stale `build-group=` lines as repos merge into develop (see "Merge sequence" below).
 
 The opt-in alternative `run-ci-on-draft=true` (see annotation table) makes CI run on Drafts; not used in this project — the deferral is the feature.

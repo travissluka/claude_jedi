@@ -1,6 +1,6 @@
 # VADER (The VAriable DErivation Repository)
 
-> Last updated against commit `d413aa52` (2026-07-01). Run `cd bundle/vader && git log --oneline d413aa52..HEAD` to see what changed since.
+> Last updated against commit `3ff3f1b3` (2026-07-23). Run `cd bundle/vader && git log --oneline 3ff3f1b3..HEAD` to see what changed since.
 >
 > **Covers:** Vader, RecipeBase, DefaultCookbook, VaderParameters, planVariable algorithm, _A/_B/_C recipe variants, changeVar/changeVarTraj/changeVarTL/changeVarAD, AirTemperature, DryAirDensity, HydrostaticPressure, RelativeHumidity, MoistureControl, Met Office SVP lookup tables (`src/mo/`), DustBin1MassConcentration_A, DustBin2MassConcentration_A, eval_dust_bin_mass_concentration_nl, GSW OceanConversions, adjoint dot-product test pattern, adding a new recipe.
 
@@ -88,7 +88,7 @@ VADER follows JEDI naming standards (from jedi-docs conventions):
 
 **Clouds** (8): CloudIceMixingRatio (dry/wet, 4 total), CloudLiquidWaterMixingRatio (dry/wet, 4 total)
 
-**Geopotential** (6): GeopotentialHeight (A/B — B is fv3-jedi-compatible, PR #379), GeopotentialLevels (A), GeopotentialHeightLevels (A/B), GeopotentialHeightAtSurface, HeightAboveMeanSeaLevel (A, PR #381), HeightAboveMeanSeaLevelAtSurface. The `*AtInterface` recipes were renamed to `*Levels` (`GeopotentialAtInterface`→`GeopotentialLevels`, `GeopotentialHeightAtInterface`→`GeopotentialHeightLevels`) and the ingredient `surface_geopotential` was renamed to `geopotential_at_surface` (PR #355).
+**Geopotential** (6): GeopotentialHeight (A/B — B is fv3-jedi-compatible, PR #379), GeopotentialLevels (A), GeopotentialHeightLevels (A/B), GeopotentialHeightAtSurface, HeightAboveMeanSeaLevel (A, PR #381), HeightAboveMeanSeaLevelAtSurface. The `*AtInterface` recipes were renamed to `*Levels` (`GeopotentialAtInterface`→`GeopotentialLevels`, `GeopotentialHeightAtInterface`→`GeopotentialHeightLevels`) and the ingredient `surface_geopotential` was renamed to `geopotential_at_surface` (PR #355). `GeopotentialHeight_B` gained a `use empirical formula` YAML option (default `true`, PR #387): when `true` it applies the empirical compressibility correction as before; when `false` it skips `compressibilityFactor()` (treated as 1.0) and uses the standard hypsometric formula instead — set `false` to match older/non-empirical hypsometric conventions.
 
 **Ozone** (1): MoleFractionOfOzoneInAir (A) → `mole_fraction_of_ozone_in_air` (PR #377)
 
@@ -102,7 +102,7 @@ VADER follows JEDI naming standards (from jedi-docs conventions):
 
 **Ocean** (2, requires GSW): SeaWaterTemperature, SeaWaterPotentialTemperature
 
-**CRTM convention** (~30, `src/vader/betaNames_CRTMRecipes/`, all NL-only `_A`, PR #332): recipes producing CRTM-convention variable names for the radiance forward operator — CloudLiquidWater/CloudLiquidIce, Graupel, Hail, RainWater, SnowWater, MassContentOf{CloudIce,CloudLiquidWater,Graupel,Hail,Rain,Snow}InAtmosphereLayer, EffectiveRadiusOf{CloudIce,CloudLiquidWater,Graupel,Hail,Rain,Snow}Particle, SkinTemperature (+ WhereLand/Sea/Ice/Snow area-fraction blends), {Ice,Land,Water}AreaFraction, SurfaceSnowAreaFraction, {Eastward,Northward}WindAtSurface, WindSpeedAtSurface, WindFromDirectionAtSurface, TropopausePressure. These register only via `RecipeMaker` (factory) — `DefaultCookbook.h` is unchanged, so they are factory-available but **not** wired into the default cookbook.
+**CRTM convention** (~55, `src/vader/betaNames_CRTMRecipes/`, PRs #332 + #382): recipes producing CRTM-convention variable names for the radiance forward operator — CloudLiquidWater/CloudLiquidIce, Graupel, Hail, RainWater, SnowWater, MassContentOf{CloudIce,CloudLiquidWater,Graupel,Hail,Rain,Snow}InAtmosphereLayer, EffectiveRadiusOf{CloudIce,CloudLiquidWater,Graupel,Hail,Rain,Snow}Particle, SkinTemperatureAtSurface (renamed from SkinTemperature in #382; + WhereLand/Sea/Ice/Snow area-fraction blends), {Ice,Land,Water}AreaFraction (with `_B` variants), SurfaceSnowAreaFraction (+ `_B`), {Eastward,Northward}WindAtSurface, WindSpeedAtSurface, WindFromDirectionAtSurface, TropopausePressure. PR #382 (CRTM Surface Variable Transforms) added a batch of surface recipes — WindSpeedAt10m (`_A`/`_B`), WindToDirectionAtSurface, AverageSurfaceTemperatureWithinFieldOfView — plus a new `GSI_Specific/` subdirectory of GSI-convention surface recipes: GsiSnowWaterEquivalent, GsiSurfaceTypeIndex, LandTypeIndexIgbp, LandTypeIndexNpoess, LeafAreaIndex, SoilTemperature, SoilType, SurfaceSnowThickness, VegetationAreaFraction, VegetationTypeIndex, VolumeFractionOfCondensedWaterInSoil. **TL/AD is no longer uniformly absent**: SkinTemperatureAtSurface*, {Ice,Land,Water}AreaFraction, SurfaceSnowAreaFraction, WindFrom/ToDirectionAtSurface, WindSpeedAtSurface, and AverageSurfaceTemperatureWithinFieldOfView now carry TL/AD; the `GSI_Specific/` recipes remain NL-only `_A`. These register only via `RecipeMaker` (factory) — `DefaultCookbook.h` is unchanged, so they are factory-available but **not** wired into the default cookbook.
 
 ### TL/AD Support
 
@@ -151,7 +151,7 @@ Key patterns:
 |-----------|---------|
 | `src/vader/` | Core: `vader.h/cc`, `RecipeBase.h/cc`, `DefaultCookbook.h`, `VaderParameters.h` |
 | `src/vader/recipes/` | Core recipe implementations (~50 headers + .cc files) |
-| `src/vader/betaNames_CRTMRecipes/` | ~30 NL-only `_A` recipes producing CRTM-convention variable names (PR #332); `RecipeMaker`-registered only, not in `DefaultCookbook.h` (see CRTM convention category) |
+| `src/vader/betaNames_CRTMRecipes/` | ~55 recipes producing CRTM-convention variable names (PRs #332, #382), incl. a `GSI_Specific/` subfolder of NL-only GSI-convention surface recipes; several surface recipes now have TL/AD; `RecipeMaker`-registered only, not in `DefaultCookbook.h` (see CRTM convention category) |
 | `src/mo/` | Met Office integration: lookup tables (SVP), eval functions, constants, Fortran I/O |
 | `src/mo/recipes/` | Met Office-derived recipes (e.g., `DustBin1MassConcentration`, `DustBin2MassConcentration`) |
 | `src/OceanConversions/` | GSW (Gibbs SeaWater) Fortran bindings for ocean recipes |

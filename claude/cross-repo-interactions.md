@@ -1,6 +1,6 @@
 # Cross-Repo Interactions
 
-> Last updated 2026-04-30. Based on the same repo commits as the individual `claude/*.md` files.
+> Last updated 2026-09-03. Based on the same repo commits as the individual `claude/*.md` files.
 >
 > **Covers:** MODEL template contract (Geometry/State/Increment/Model/LinearModel/VariableChange/LinearVariableChange/ErrorCovariance/ModelAux*/LocalInterpolator/ModelData), ufo::ObsTraits, GetValues<MODEL,OBS>, saber::ErrorCovariance<MODEL>, instantiateCovarFactory, instantiateObsFilterFactory, instantiateObsLocFactory, ATLAS as shared data layer, impact map (what-changes-affects-what), C++/Fortran interop patterns (ISO_C_BINDING / opaque-handle / ATLAS bridge), coupled DA, CRTM integration.
 
@@ -153,6 +153,11 @@ SABER also provides `Localization<MODEL>` for ensemble methods (same FieldSet co
 
 **ioda** handles data I/O and storage. **ufo** handles physics (operators, filters, bias).
 
+**Two breaking contract changes on the OBS side** (oops #3358 / #3367, ufo #4278/#4298):
+
+- `simulateObs` takes its obs-aux argument **non-const**: `simulateObs(const GeoVaLs_ &, ObsVector_ &, ObsAuxControl_ & obsaux, const ObsDataInt_ &, ObsVector_ &, ObsDiags_ &)` in both `oops::ObsOperatorBase` and `oops::interface::ObsOperator`, mirrored by `ufo::ObsOperator::simulateObs(..., ObsBias &, ...)`. This lets an operator initialize bias coefficients while computing H(x) (the ufo VarBC cold start). Any out-of-tree `OBS::ObsOperator` must drop the `const`.
+- `oops::ObsSpaces<OBS>` is constructed from the **whole `observations:` section**, not the `observers:` list. The obs-space specs must sit under `observers:` (absent key → `eckit::UserError`), and keys directly under `observations:` act as per-obs-space defaults (`detail::applyObsSpaceDefaults`; first user is `obs data container: ObsGroup|OSDF`). Every driver or application that builds `ObsSpaces` (including model-repo mains such as ufo's `RunCRTM`) and every obs YAML must follow suit.
+
 ## How VADER Integrates with Model Variable Changes
 
 VADER is a non-template library operating on `atlas::FieldSet` directly. Model repos use it in their `VariableChange` implementations:
@@ -239,6 +244,8 @@ Execution:
 |-----------------|--------------------------|
 | oops interface contract (e.g., new method on State) | All model repos (fv3-jedi, mpas-jedi, pyiri-jedi, soca, L95, QG) |
 | ufo::ObsTraits (new type alias) | All model repo mains that instantiate with `ufo::ObsTraits` |
+| oops `ObsOperatorBase::simulateObs` signature | Every `OBS::ObsOperator` implementation (ufo, plus any out-of-tree obs backend) |
+| oops `ObsSpaces` constructor / `observations:` YAML shape | All applications constructing `ObsSpaces`; all obs YAML in every repo's tests |
 | SABER block interface | All blocks in saber; model repos unaffected (ATLAS abstraction) |
 | VADER recipe | No other repos need changes (auto-discovered via cookbook) |
 | ioda::ObsSpace API | ufo (uses ObsSpace in operators/filters), model repo tests (YAML obs configs) |

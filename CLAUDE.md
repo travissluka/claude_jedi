@@ -19,22 +19,15 @@ Architecture primer: `claude/cross-repo-interactions.md` (template contracts, Ge
 
 ## Directory Layout
 
-```
-jedi/
-├── bundle/          # Source (do NOT drop Claude files here)
-├── build/           # Build (ephemeral, do NOT edit)
-└── claude/          # Architecture docs (this CLAUDE.md points here)
-```
-
-Working files go in `jedi/` or `jedi/claude/`, never `bundle/` or `build/`.
+Working files go in `jedi/` or `jedi/claude/`, never `bundle/` (source) or `build/` (ephemeral).
 
 ## Environment
 
 ```bash
-source ~/work/env.sh       # GCC 13.3.0, MPICH 4.2.3, Python 3.11.7, spack-stack 1.9.2
+source ~/work/env.sh       # compilers, MPI, Python, spack-stack
 ```
 
-Verify: `$SPACK_STACK_VER` should print `1.9.2`. Sets `JEDI_ROOT=~/work/jedi`.
+Sets `JEDI_ROOT=~/work/jedi`; `$SPACK_STACK_VER` reports the stack version.
 
 ## Build & Test (common commands)
 
@@ -50,11 +43,11 @@ ctest --output-on-failure -R <pat>   # run tests (append -N to list, -E coding_n
 ctest --output-on-failure --test-dir build/<repo>
 ```
 
-~2742 ctests; 1500s timeout. Build type `RelWithDebInfo`. Lint: cpplint (Google style, 100-char, 2-space); Python pycodestyle (120-char).
+1500s test timeout. Build type `RelWithDebInfo`. Lint: cpplint (Google style, 100-char, 2-space); Python pycodestyle (120-char).
 
 Per-repo quirks (CMake flags, unique deps, test naming): `claude/build-and-test.md`.
 
-Build is a DAG, not a chain — model-interface repos (fv3-jedi, soca, mpas-jedi, pyiri-jedi) are siblings on the same level. Full DAG with per-repo direct deps and a topologically-sorted parallel-build order: `claude/build-and-test.md` (#build-dependency-dag). Bundle v8.0.0.
+Build is a DAG, not a chain — model-interface repos (fv3-jedi, soca, mpas-jedi, pyiri-jedi) are siblings on the same level. Full DAG with per-repo direct deps and a topologically-sorted parallel-build order: `claude/build-and-test.md` (#build-dependency-dag).
 
 ## GitHub
 
@@ -92,8 +85,4 @@ Build is a DAG, not a chain — model-interface repos (fv3-jedi, soca, mpas-jedi
 
 ### Keeping docs current
 
-Each per-repo doc records the git hash it was last verified against. After `make update`, check diffs:
-```bash
-git -C bundle/<repo> log --oneline <recorded-hash>..HEAD
-```
-Update the doc and refresh the hash if classes, files, or APIs changed.
+Each per-repo doc records the git hash it was last verified against. Use the `update-repos` skill to sync and refresh them.

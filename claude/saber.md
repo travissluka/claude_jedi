@@ -1,8 +1,8 @@
 # SABER (System for Atmospheric and Boundary Layer Error Representation)
 
-> Last updated against commit `a8e8e1d8` (2026-07-23). Run `cd bundle/saber && git log --oneline a8e8e1d8..HEAD` to see what changed since.
+> Last updated against commit `9c828faa` (2026-08-27). Run `cd bundle/saber && git log --oneline 9c828faa..HEAD` to see what changed since.
 >
-> **Covers:** SaberCentralBlockBase, SaberOuterBlockBase, SaberParametricBlockChain, SaberEnsembleBlockChain, SaberHybridBlockChain, SaberOuterBlockChain, BUMP_NICAS, Diffusion/DiffusionImpl/DiffusionFilter, FastLAM, Bifourier, SpectralCovariance/Correlation/AnalyticalCorrelation, StdDev, VertLoc, DuplicateVariables, ID, GaussToCS, VaderBlock, TorchBalance, GSIBlockChain, QUENCH testbed, ErrorCovariance<MODEL>, ErrorCovarianceToolbox, ProcessPerts, Localization, multiply/multiplyAD/leftInverseMultiply/multiplySqrt, direct/iterative calibration, dirac tests, CoupledErrorCovariance.
+> **Covers:** SaberCentralBlockBase, SaberOuterBlockBase, SaberParametricBlockChain, SaberEnsembleBlockChain (incl. scale-dependent localization), SaberHybridBlockChain, SaberOuterBlockChain, BUMP_NICAS, Diffusion/DiffusionImpl/DiffusionFilter, FastLAM, Bifourier (incl. BifourierCovarianceImpl/BifourierSpectralConverter/BifourierAnalyticalFilter/BifourierCovarianceSqrt), SpectralCovariance/Correlation/AnalyticalCorrelation, StdDev, VertLoc, DuplicateVariables, ID, GaussToCS, VaderBlock, TorchBalance, GSIBlockChain, QUENCH testbed, ErrorCovariance<MODEL>, ErrorCovarianceToolbox, ProcessPerts, Localization, multiply/multiplyAD/leftInverseMultiply/multiplySqrt/variance, direct/iterative calibration, dirac tests, CoupledErrorCovariance.
 
 ## Overview
 
@@ -51,6 +51,7 @@ Three chain types compose blocks into full covariance operators:
 - Optional **scaled perturbations** (PR #1240): override the default `1/(N-1)` covariance denominator via YAML key `denominator for normalizing ensemble covariance` (double). Useful when the loaded ensemble already represents perturbations from a different effective population size, or for user-tuned inflation-like scaling. Scaling is applied once at load time by `readAndScaleEnsemble` (`saber/oops/Utilities.h`), which pre-multiplies each member by `1/√denom` — so `multiply`/`randomize`/`multiplySqrt`/`multiplySqrtAD` no longer divide by `(N-1)` at apply time. Math is unchanged; this just moves the cost to load.
 - Ensemble sources: states, perturbations, base+perturbations, pair differences, or on alternative geometry
 - Config keys: `ensemble`, `localization`, `ensemble transform`, `inflation field`, `inflation value`, `denominator for normalizing ensemble covariance`
+- **Scale-dependent localization** (PR #1177): internally the chain is now a `std::vector<ScaleData>`, one per scale, driven by an optional `scales:` YAML list — each entry may set its own `filter`, `interpolator`, `localization`, `output` (`generic write`/`model write`), `ensemble pert`, `ensemble pert on other geometry`, `use residual from filter`, and `localization at full resolution`. Filters split each member into scale bands at construction (recursive subtraction, with an optional interpolator to/from a reduced resolution) mirroring `ProcessPerts`. Top-level `multiscale strategy: separated | crossed` picks the combination rule: `separated` sums `nens × locCtlVec` sizes over scales, `crossed` requires equal per-scale control-vector sizes. `recursive perturbations processing` (renamed from `recursive filters`) and `sub-ensembles size` (per-sub-ensemble mean removal) are also chain-level keys. The ensemble may now legally be empty (a single member is still an error). `ctlVecSize()` is now cached (`ctlVecSize_`). Without `scales:`, localization must still be present (`ASSERT(!params.scales.value())` when localization is absent).
 
 **`SaberHybridBlockChain`** — Weighted combination of multiple covariances:
 - Outer blocks + weighted components (each a full covariance + weight)
@@ -59,8 +60,10 @@ Three chain types compose blocks into full covariance operators:
 
 **`SaberOuterBlockChain`** — Sequences outer blocks, handles reverse-order adjoint application. Also used as the implementation basis for **filter blocks**: `NICASFilter`, `DiffusionFilter`, and `SpectralAnalyticalCorrelation` are central blocks that internally wrap a `SaberOuterBlockChain` to apply localization/correlation as a self-contained filter (replacing the older monolithic filter classes).
 
-**`SaberCentralBlock`** — Container for multivariate central blocks:
-- Strategies: "duplicated" (replicate per variable group), "duplicated and weighted" (with off-diagonal weights)
+**`SaberCentralBlock`** — Container for multivariate central blocks (wraps one or many concrete central blocks in `groupCentralBlocks_`, enabling e.g. scale-dependent localization):
+- `multivariate strategy` (default `"single"`): `"single"` (one `saber block name`, no `groups:`), `"univariate"`, `"duplicated"` (replicate per variable group), `"duplicated and weighted"` (with off-diagonal weights), `"crossed"`. `"single"` and `groups:` are mutually exclusive.
+- Per-group keys inside `groups:` entries are `group central block` and `group outer blocks` (PR #1284, formerly `saber central block` / `auxiliary outer blocks`). The **top-level** `saber central block` / `saber outer blocks` keys of the chain itself are unchanged.
+- PR #1284 rewrote most of `SaberCentralBlock.cc` but left the **public interface untouched** (no methods added, removed, or renamed); the churn is private (`applyWeights`/`applyWeightsAD` helpers for `"duplicated and weighted"`, `groupOuterBlockChains_`).
 
 ### Chain Multiply Order
 
@@ -104,6 +107,12 @@ Control vector size:
 - **Ensemble, no localization**: one scalar per member
 - **Ensemble with localization**: `ens_size × loc_ctlVecSize()`
 
+### Variance (diagonal of B)
+
+`SaberBlockChainBase` gained pure-virtual `variance()` and `randomCtlVec()` (PR #1273). `SaberCentralBlockBase::variance()` defaults to `NotImplemented`; `SaberOuterBlockBase::variance(FieldSet3D&)` (transforms an input variance fieldset in place) also defaults to `NotImplemented`. Implementations: NICAS/Diffusion/`IDCentral` report unit variance (1.0 on the diagonal); `StdDev` (both generic and BUMP variants) multiplies by σ²; `Interpolation` gives an approximate diagonal (`T diag(C)`, documented caveat, not exact); hybrid chains sum the weighted component variances (not the parallel-hybrid path); ensemble chains sum over scales (separated strategy only). `SaberOuterBlockChain::applyBackgroundVariance()` propagates the transform innermost-first. Exposed to callers as `ErrorCovariance<MODEL>::variance()`.
+
+QUENCH gained a matching test tool: `quenchTestVariance` / `saber_quench_test_variance.x` (new `src/saber/test/Variance.h`), configured with `expected per-point variance` and an optional `monte carlo: {samples, tolerance}` block; tests registered in `test/testlist/saber_variance.cmake`.
+
 ### Built-in Validation Tests
 
 Configurable under any block chain:
@@ -111,6 +120,7 @@ Configurable under any block chain:
 adjoint test: true          # Verify <y, Ax> = <Aᵀy, x>
 adjoint tolerance: 1.0e-10
 square-root test: true      # Verify UUᵀ = B
+square-root tolerance: 1.0e-10   # default as of PR #1177 (was 1.0e-12)
 inverse test: true           # Verify B⁻¹B = I
 ```
 
@@ -136,7 +146,7 @@ SABER operates on `atlas::FieldSet` — it converts `MODEL::Increment` via the m
 Other OOPS integration:
 - **`Localization<MODEL>`** — wraps SABER blocks for ensemble localization
 - **`ErrorCovarianceToolbox<MODEL>`** — diagnostic application: Dirac impulse-response tests, covariance profiles (1D function of separation distance), randomization (generate dx ~ B, compute variance from ensemble)
-- **`ProcessPerts<MODEL>`** — processes ensemble perturbations through band filters (SABER block chains), with recursive filtering option and multiple output modes
+- **`ProcessPerts<MODEL>`** — processes ensemble perturbations through band filters (SABER block chains), with recursive filtering option (YAML key `recursive perturbations processing`, renamed from `recursive filters`) and multiple output modes
 
 ### Factory Pattern
 
@@ -179,20 +189,27 @@ C++ wrappers: `BUMP.h`, `NICAS.h`, `type_bump.h`. Extensive configuration via `B
 
 BUMP's registry now uses the shared `oops::util::linkedList_i.f`/`linkedList_c.f` (`registry_t`) instead of its own bespoke `tools_linkedlist_{interface,implementation}.fypp` (deleted, PR #1277) — the same pattern GSI already used. `registry%init()` dropped its `f_comm` argument in the switch.
 
+`type_nicas_cmp.fypp` weight computation lists `isa` in the OpenMP `private` clause (PR #1282); omitting it raced across threads in multi-component NICAS. PR #1292 is a further internal performance rework of `type_nicas_cmp`/`type_bnda`/`type_geom`/`type_linop`/`type_samp` (cached neighbor candidates, split arc-validity checks, `balldata_pack_empty`, mask handling) — no YAML/namelist change.
+
 ### `bifourier/` — Spectral covariance via bidirectional Fourier (requires FFTW or ECTRANS)
 
 | Block | Purpose |
 |-------|---------|
-| `BifourierCovariance` | Main spectral covariance block (39KB impl) |
+| `BifourierCovariance` | Main spectral covariance block; now a thin wrapper around `BifourierCovarianceImpl` |
 | `BifourierBalance` | Balance operator (48KB impl) |
 | `BifourierAromeBalance` | AROME-specific balance (32KB impl) |
 | `BifourierAromeCovariance` | AROME covariance variant |
 | `BifourierGridToSpectral` / `BifourierSpectralToGrid` | Transform blocks |
 | `BifourierID` | Identity in spectral space |
+| `BifourierAnalyticalFilter` | Analytical waveband filter (outer block, new PR #1178) |
+| `BifourierCovarianceSqrt` | Square-root form of the covariance (outer block, new PR #1177) |
+| `BifourierSpectralConverter` | Cross-resolution spectral converter (outer block, new PR #1177) |
 
 Transform backends: `BifourierTransformFFTW`, `BifourierTransformECTRANS`.
 
 The biperiodization step's `inner partitioner` YAML key is **optional** (PR #1250): it is required only when the outer partitioner is `custom`; otherwise the function space and partition are copied from the outer grid (previously it defaulted to `checkerboard` and was always read).
+
+**Covariance implementation split** (PR #1177): `BifourierCovariance` now delegates to a new `BifourierCovarianceImpl`, which holds the shared `read`/`calibration`/`profiles`/`inflation`/`correlation`/`write` params (including `sub-ensembles size`, `half life`, `cycle index`). `BifourierSpectralConverter` (new outer block) does the cross-resolution spectral alltoall, configured with `nx`/`ny`/`partitioner`. `BifourierAnalyticalFilter` (new outer block) applies an analytical waveband filter: `waveband min`/`waveband peak`/`waveband max`, `inverse mode`. `BifourierCovarianceSqrt` (new outer block) exposes the covariance's square root for use as a standalone transform. Together these back the new scale-dependent-localization multiscale dirac tests (`dirac_bifourier_multiscale_*`, `dirac_multiscale_*`, `error_covariance_training_multiscale_*`, `randomization_multiscale_1`).
 
 ### `fastlam/` — Fast Limited Area Model correlation (requires FFTW)
 
@@ -212,6 +229,8 @@ vertical:
 ```
 `DiffusionImpl::configureDiffusion()` parses this and forwards to `oops::Diffusion::setParameters(..., VerticalMethod::Implicit, N)`. The input length scale is interpreted as the Daley length scale of the output kernel for both schemes; the optional GC-half-width → Daley conversion (1/3.67, `as gaussian: false`) is applied beforehand.
 
+`Diffusion` gained `variance()` (unit-variance diagonal, per the generic Variance capability above). Bugfix (PR #1273, same commit as `variance()`): `diffusion::randomize()` was missing a normalization step — it now calls `applyNormSqrt()` after `multiplySqrtTL()`. This changes the statistics of `randomize`/dirac-random draws through Diffusion central blocks on any branch that diverged from develop before this landed (driven the soca test-ref update in soca#1255).
+
 ### `spectralb/` — Spectral balance for global models (requires atlas TRANS or ECTRANS)
 
 | Block | Purpose |
@@ -230,7 +249,9 @@ vertical:
 
 ### `gsi/` — GSI (Gridpoint Statistical Interpolation) covariance
 
-`GSIBlockChain` wraps GSI Fortran backend via linked-list pattern. Requires `gsibec` library. Supports regional fv3-jedi and mpas-jedi analyses via the `regional mode: true` YAML flag (`GSIParameters.h`); the regional path uses 2D `lats2`/`lons2` arrays in `gsi_grid_mod.f90` for non-separable grids. Field-name resolver in `gsi_covariance_mod.f90` maps `prsl ↔ air_pressure` alongside the existing `ts ↔ sst` mapping; the surface-geopotential (`phis`) lookup now matches `geopotential_at_surface` (was `geopotential_height_times_gravity_at_surface`, following the vader/fv3-jedi rename).
+`GSIBlockChain` wraps GSI Fortran backend via linked-list pattern. Requires `gsibec` library. Supports regional fv3-jedi and mpas-jedi analyses via the `regional mode: true` YAML flag (`GSIParameters.h`); the regional path uses 2D `lats2`/`lons2` arrays in `gsi_grid_mod.f90` for non-separable grids. Field-name resolver in `gsi_covariance_mod.f90` maps `prsl ↔ air_pressure` alongside the existing `ts ↔ sst` mapping; the surface-geopotential (`phis`) lookup now matches `geopotential_at_surface` (was `geopotential_height_times_gravity_at_surface`, following the vader/fv3-jedi rename). `get_rank2_` also resolves aerosol extinction handles `ext1`/`ext2`/`ext3` ↔ `volume_extinction_in_air_due_to_aerosol_particles_lambda{1,2,3}`. Requires `gsibec` 1.4.4.
+
+Temperature handling (PR #1254): `svfix_` does **no** JEDI-side `tv` → `t` conversion. It only marks `tv` as `filled-tv` and lets gsibec derive sensible temperature internally from `tv`/`q` (the `gsi_tv_to_t_tl`/`gsi_tv_to_t_ad` calls and the `tsen`/`filled-tv` special case are gone). Callers therefore declare `tsen` as a real `met_guess`/`state_vector` entry in the GSI namelist rather than relying on saber to synthesize it.
 
 ### `interpolation/` — Grid interpolation blocks
 
@@ -325,6 +346,9 @@ Outer blocks (used in `saber outer blocks: [{ saber block name: "<name>" }]`):
 | `BifourierSpectralToGrid` | BifourierSpectralToGrid | bifourier/ |
 | `BifourierGridToSpectral` | BifourierGridToSpectral | bifourier/ |
 | `Biperiodization` | Biperiodization | bifourier/ |
+| `BifourierAnalyticalFilter` | BifourierAnalyticalFilter | bifourier/ |
+| `BifourierCovarianceSqrt` | BifourierCovarianceSqrt | bifourier/ |
+| `BifourierSpectralConverter` | BifourierSpectralConverter | bifourier/ |
 | `TorchBalance` | TorchBalance | torchbalance/ |
 
 ## Calibration Modes

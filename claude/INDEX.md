@@ -29,7 +29,9 @@ Every per-repo and cross-cutting doc also has its own `> **Covers:** ...` line a
 | ObsError types (Diagonal, CrossVarCov, BiasCorrelated, WithinGroup) | `ufo.md` |
 | ObsLocalization (HorGC99, HorSOAR, VertLocalization, Rossby) | `ufo.md`, `soca.md` (Rossby) |
 | EffectiveError / EffectiveQC output variables | `observation-data-flow.md` |
-| ObsBias / VarBC | `ufo.md` |
+| ObsBias / VarBC, VarBC cold start | `ufo.md` |
+| SuperOb filter + superob algorithms (mean/circular mean/count/max/range/radar) | `ufo.md` (#filters) |
+| `observations:` / `observers:` YAML shape, ObsSpaces section defaults | `oops.md` (#cost-functions), `ioda.md` (#yaml-configuration) |
 | GeoVaLs (model state at obs locations) | `ufo.md`, `cross-repo-interactions.md` |
 | ioda::ObsSpace, ObsVector, ObsDataVector | `ioda.md` |
 | ObsSpace distributions (RoundRobin / Halo / Inefficient) | `ioda.md`, `mpi-patterns.md` |

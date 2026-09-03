@@ -77,6 +77,10 @@ Two storage formats:
 virtual const oops::Variables & requiredVars() const = 0;  // model vars needed
 virtual void simulateObs(const GeoVaLs &, ioda::ObsVector & hofx,
                          ObsDiagnostics &, const QCFlags_t &) const = 0;
+
+// ufo::ObsOperator (the factory-dispatching wrapper) — note the non-const ObsBias:
+void simulateObs(const GeoVaLs &, ioda::ObsVector &, ObsBias &,
+                 const QCFlags_t &, ioda::ObsVector & ybias, ObsDiagnostics &) const;
 ```
 
 - `requiredVars()` — which model variables to interpolate
@@ -86,6 +90,8 @@ virtual void simulateObs(const GeoVaLs &, ioda::ObsVector & hofx,
 ### Bias correction
 
 `ObsAuxControl` holds bias coefficients (e.g., VarBC for radiances). The bias estimate is added to H(x) during `simulateObs()`. Bias predictors read from GeoVaLs (reduced format).
+
+The obs-aux argument is **non-const** as of oops #3367 / ufo #4298: `ufo::ObsOperator::simulateObs` calls `ObsBias::coldStart(odb_, yy, qc_flags)` on the raw H(x) *before* running `ObsBiasOperator`, so VarBC coefficients with no prior value can be seeded from the `y - H(x)` histogram mode (see `ufo.md`, VarBC cold start). `oops::CostJbObsAux` then adopts those cold-started coefficients as the Jb background on the first outer loop.
 
 ## Stage 4: QC Filters
 

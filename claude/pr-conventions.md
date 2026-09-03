@@ -170,6 +170,13 @@ git commit --allow-empty -m 'trigger CI' && git push
 
 This is also how you pick up changes to `build-group=` annotations after editing the PR body — the annotations are read at CI-launch time, not on every PR-body edit.
 
+**Never use `gh run rerun`.** It re-runs the old workflow runs against the *same (stale) SHA*, which
+comes back partial: on a real run the `JEDI CI: gcc11` check stayed pinned to the old failed cdash
+build and never refreshed, while only some contexts re-ran. An empty commit creates a new SHA, which
+spins up fresh check contexts across the board (gcc11 / intel / gnu-openmpi / launch-tests) and
+rebuilds against the current matching feature branches in the sibling repos. After pushing, the PR
+head SHA changes, so reset any CI-monitor baseline to the new SHA.
+
 ## Cross-repo PR references in prose
 
 When *prose-referencing* a PR in another repo (e.g., in the Description or Impact section, or in commit messages), use the full `JCSDA-internal/<repo>#<n>` form, not bare `#<n>` — bare `#<n>` autolinks to the *current* repo and produces a broken link.

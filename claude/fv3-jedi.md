@@ -1,6 +1,6 @@
 # FV3-JEDI
 
-> Last updated against commit `75efc558` (2026-07-23). Run `cd bundle/fv3-jedi && git log --oneline 75efc558..HEAD` to see what changed since.
+> Last updated against commit `16abb0b4` (2026-08-27). Run `cd bundle/fv3-jedi && git log --oneline 16abb0b4..HEAD` to see what changed since.
 >
 > **Covers:** fv3jedi::Traits, fv3jedi::{Geometry,State,Increment,Model,LinearModel,VariableChange,LinearVariableChange,ModelBias,ModelData}, FV3_FORECAST_MODEL backends (GEOS/UFS/FV3CORE), cubed-sphere geometry, LAM support, FV3LM linear model, GFS/GEOS I/O backends, FV3-JEDI/FMS interop, opaque-handle Fortran pattern, VertRemap (lapse-rate vertical remap after horizontal interpolation).
 
@@ -84,6 +84,8 @@ Config key: `filetype` in YAML (`fv3 restart`, `cube sphere history`, `structure
 
 ### ErrorCovariance (`ErrorCovariance/`)
 Delegates to SABER for background error covariance.
+
+GSIbec configs (`gsi static covariance`) need `geopotential_at_surface` in the analysis/state variable lists and in the `Control2Analysis` linear-variable-change input/output lists, plus a `field io names: { geopotential_at_surface: phis }` entry, since the saber GSI block resolves `phis` from it. `adjoint test: true` (`adjoint tolerance: 1e-9`) is set on the SABER covariance in the GSI test YAMLs. Requires `gsibec` 1.4.4.
 
 ## Executables (`src/mains/`)
 

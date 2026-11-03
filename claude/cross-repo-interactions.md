@@ -1,6 +1,6 @@
 # Cross-Repo Interactions
 
-> Last updated 2026-09-03. Based on the same repo commits as the individual `claude/*.md` files.
+> Last updated 2026-11-03. Based on the same repo commits as the individual `claude/*.md` files.
 >
 > **Covers:** MODEL template contract (Geometry/State/Increment/Model/LinearModel/VariableChange/LinearVariableChange/ErrorCovariance/ModelAux*/LocalInterpolator/ModelData), ufo::ObsTraits, GetValues<MODEL,OBS>, saber::ErrorCovariance<MODEL>, instantiateCovarFactory, instantiateObsFilterFactory, instantiateObsLocFactory, ATLAS as shared data layer, impact map (what-changes-affects-what), C++/Fortran interop patterns (ISO_C_BINDING / opaque-handle / ATLAS bridge), coupled DA, CRTM integration.
 
@@ -86,8 +86,10 @@ Forward iterator over gridpoints (LocalEnsembleDA). Methods: `operator==`, `oper
 
 ### VariableChange / LinearVariableChange
 
-- **Nonlinear**: `changeVar(State, Variables)`, `changeVarInverse(State, Variables)`
-- **Linear**: `changeVarTraj(State, Variables)` + TL/AD/inverse variants (`changeVarTL`, `changeVarInverseTL`, `changeVarAD`, `changeVarInverseAD`)
+- **Nonlinear**: `changeVar(State, Variables)`
+- **Linear**: `changeVarTraj(State, Variables)`, `changeVarTL`, `changeVarAD`
+
+No inverse methods (`changeVarInverse`/`changeVarInverseTL`/`changeVarInverseAD` removed in oops #3261). `ModelSpaceCovarianceBase::inverseMultiply` with a `linear variable change` now needs an explicit `inverse linear variable change:` YAML block (its input/output variables are overwritten from the forward change).
 
 ### ErrorCovariance — `Covariance(Geometry, Variables, Configuration, State, State)`
 
@@ -103,7 +105,7 @@ Auxiliary state for model bias/parameters; minimal stubs in most repos. ModelAux
 
 ### LocalInterpolator — `LocalInterpolator(Configuration, Geometry, lats, lons)`
 
-`apply(Variables, State, mask, vec)`, `apply(Variables, Increment, mask, vec)`, `applyAD(Variables, Increment, mask, vec)`. Most repos use `oops::UnstructuredInterpolator` (generic ATLAS-based); pyiri-jedi uses custom interpolators for field-aligned geometry.
+`apply(Variables, State, mask, vec)`, `apply(Variables, Increment, mask, vec)`, `applyAD(Variables, Increment, mask, vec)`. `apply` must leave masked-out targets **untouched** in the buffer (not even a missing value): GetValues relies on this across time sub-windows. A non-generic `LocalInterpolator` (not derived from `atlasbase::Interpolator`) must also provide `static makeTargetPartitioner(const Geometry &)` returning an object with `int interpolatingTask(lat, lon) const` (generic ones get `oops::SourceProximityPartitioner` from `GeometryData`); GetValues uses it to scatter targets to source-grid tasks. Most repos use `oops::UnstructuredInterpolator` (generic ATLAS-based); pyiri-jedi uses custom interpolators for field-aligned geometry.
 
 ## How GetValues Bridges Model to Observations
 
@@ -133,6 +135,8 @@ Both fv3-jedi and mpas-jedi use `oops::UnstructuredInterpolator` as their `Local
 
 SABER also provides `Localization<MODEL>` for ensemble methods (same FieldSet conversion pattern).
 
+saber #1288 dropped the `Saber` class prefix (`SaberOuterBlockBase`→`OuterBlockBase`, `SaberCentralBlock`→`CentralBlockWrapper`, `Saber*Factory/Maker`→`*Factory/Maker`, headers renamed to match). Out-of-tree blocks (e.g. soca `SaberBlocks/`) must follow; `saber/tools/rename_classes.py` has the full mapping.
+
 ## How UFO and IODA Split the OBS Contract
 
 `ufo::ObsTraits` (`ufo/src/ufo/ObsTraits.h`) bundles types from **both** repos:
@@ -152,6 +156,8 @@ SABER also provides `Localization<MODEL>` for ensemble methods (same FieldSet co
 | `SampledLocations` | **ufo** | Interpolation paths |
 
 **ioda** handles data I/O and storage. **ufo** handles physics (operators, filters, bias).
+
+`ioda::ObsSpace` derives only from `util::Printable`, not `oops::ObsSpaceBase` (which survives only for the toy models qg/l95). Any `OBS::ObsSpace` must implement `redistribute(const eckit::Configuration &)`; `oops::ObsSpaces::redistribute` forwards each `obs space.redistribution:` subconfig when present.
 
 **Two breaking contract changes on the OBS side** (oops #3358 / #3367, ufo #4278/#4298):
 
@@ -217,7 +223,7 @@ YAML config
   ├─ geometry section ──────────────→ MODEL::Geometry (grid, MPI layout)
   ├─ background section ────────────→ MODEL::State (read from file)
   ├─ background error section ──────→ saber::ErrorCovariance<MODEL> (B matrix)
-  │                                    └─ SaberBlockChain (BUMP/spectral/etc.)
+  │                                    └─ BlockChainBase (BUMP/spectral/etc.)
   ├─ observations section ──────────→ ioda::ObsSpace[] (read obs files)
   │                                  → ufo::ObsOperator[] (H(x) operators)
   │                                  → ufo::ObsFilters[] (QC chains)
@@ -289,9 +295,9 @@ oops PR #3147 retired `IncrementEnsemble`, `IncrementEnsemble4D`, `StateEnsemble
 - **Other model interfaces**: any model code that constructed or iterated over ensemble containers needs updating
 - The new classes use a unified `DataSetBase` pattern with `(timeIndex, ensIndex)` access
 
-## Filters as SaberOuterBlockChain (March 2026)
+## Filters as OuterBlockChain (March 2026)
 
-SABER PR #1159 refactored filter blocks so that localization/correlation filters are implemented as `SaberOuterBlockChain` instances wrapping a central correlation block, rather than monolithic classes. New classes:
+SABER PR #1159 refactored filter blocks so that localization/correlation filters are implemented as `OuterBlockChain` instances wrapping a central correlation block, rather than monolithic classes. New classes:
 - `NICASFilter` (central block wrapping NICAS as a filter chain)
 - `DiffusionFilter` (central block wrapping diffusion as a filter chain)
 - `SpectralAnalyticalCorrelation` (central block replacing the monolithic `SpectralAnalyticalFilter`)

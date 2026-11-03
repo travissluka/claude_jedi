@@ -41,10 +41,10 @@ Six stages, spanning three repos: ioda (stages 1, 6), ufo (stages 3, 4), oops (s
 4. Group variables by sampling method (different interpolation paths)
 5. Create `GetValues` instances — one per variable group
 
-### GetValues constructor (`oops/src/oops/base/GetValues.h:132`)
+### GetValues constructor (`oops/src/oops/base/GetValues.h`)
 
 **Critical MPI exchange**:
-1. For each obs location, call `geom.closestTask(lat, lon)` to find the owning MPI rank
+1. Build `LocalInterpolator::makeTargetPartitioner(geom)` (generic interpolators: `oops::SourceProximityPartitioner`) and call `partitioner.interpolatingTask(lat, lon)` per obs location to find the interpolating MPI rank
 2. `comm_.allToAll()` — exchange obs locations so each rank receives obs in its geographic domain
 3. Create `LocalInterpolator` objects for each rank's obs
 

@@ -1,8 +1,8 @@
 # PyIRI-JEDI
 
-> Last updated against commit `7e61efad` (2026-08-27). Run `cd bundle/pyiri-jedi && git log --oneline 7e61efad..HEAD` to see what changed since.
+> Last updated against commit `9cb34701` (2026-11-03). Run `cd bundle/pyiri-jedi && git log --oneline 9cb34701..HEAD` to see what changed since.
 >
-> **Covers:** pyiri::Traits, PyIRI Python submodule, ObsSpacePyiri, ObsIterator, FieldsPyiri/StatePyiri, LETKF for ionosphere, field-line tracing, VTEC/slant TEC/electron density obs, CFFI Python↔Fortran bindings, custom interpolators for field-aligned geometry.
+> **Covers:** pyiri::Traits, PyIRI Python submodule, ObsSpacePyiri, ObsIterator, FieldsPyiri/StatePyiri, LETKF for ionosphere, field-line tracing, VTEC/slant TEC/electron density obs, CFFI Python↔Fortran bindings, custom interpolators for field-aligned geometry, SI density units, background/ensemble builder scripts.
 
 ## Overview
 
@@ -25,6 +25,7 @@ Build/test quirks (Python 3.5+, CFFI, PyIRI submodule) in `claude/build-and-test
 2. **Python Adapter** — `python/pyiri_jedi/`
    - Grid generation on geomagnetic L-shell geometry (`grid.py`)
    - Ensemble I/O for NetCDF restart files (`ensemble_io.py`)
+   - Background/ensemble builders (PR #173): `build_background.py` (`generate_state_files` writes a PyIRI-derived state file, `build_member` builds one member with a randomized F10.7 centered on the observed value from `fetch_f107`/`get_f107`, or 120 for test ensembles) and the `build_ensemble.py` CLI wrapping it
    - Coordinate transformations geo ↔ magnetic (`coordconv.py`)
    - CFFI bindings to Fortran tracegrid modules
    - Forward operator implementations (`forward_operators.py`). Path integration is `integrate_geovals(integrand, interpolated_values, lower_limit, upper_limit)` (renamed and generalized from `integrate_vertical`, which took `alts`/`min_alt`/`max_alt`): trapezoidal rule with linear interpolation to the limits, returning `None` when the path has fewer than 2 points or lies entirely outside the limits, rather than asserting an exact limit match
@@ -74,7 +75,7 @@ Both expose Python interfaces via CFFI builders in `python/pyiri_jedi/`. `python
 - `ObsOpPointPyiri` — point observations at arbitrary locations
 - `ObsOpVtecPyiri` — Vertical Total Electron Content integration
 - `ObsOperatorTLAD` — tangent linear/adjoint operators
-- `ObsSpacePyiri`, `ObsVecPyiri`, `ObsDataPyiri` — obs containers (ObsSpacePyiri exposes `begin()`/`end()` returning `ObsIterator` for range-based iteration)
+- `ObsSpacePyiri`, `ObsVecPyiri`, `ObsDataPyiri`: obs containers. `ObsSpacePyiri` derives from `util::Printable` (no `oops::ObsSpaceBase`, PR #212), owns `timeWindow()`, exposes `begin()`/`end()` returning `ObsIterator`, and `redistribute()` throws `NotImplemented` (PR #188). `ObsDataPyiri::read(name)` loads from the obs space. `ObsVecPyiri(obsdb, name)` with a name other than the obs values/errors reads a vector previously saved to obsdb (e.g. `EffectiveError0`)
 - `ObsIterator` — forward iterator over observations, dereferences to `eckit::geometry::Point3` locations (stub)
 - `ObsLocNull` — null obs localization (returns 1.0) via both `GeometryPyiriIterator` and `Point3`/`Point3` overloads, matching the ufo/oops `ObsLocalization` interface
 - `ObsErrorPyiri` — observation error covariance
@@ -86,6 +87,8 @@ Both expose Python interfaces via CFFI builders in `python/pyiri_jedi/`. `python
 - `InterpolatorTracegridGeomagPyiri` — geomagnetic field-aligned interpolation
 - `InterpolatorTracegridStructuredPyiri` — structured grid interpolation
 - `InterpolatorBasePyiri` — abstract base
+
+`InterpolatorPyiri::makeTargetPartitioner()` returns a `RankZeroPartitioner` (`interpolatingTask()` always 0): all obs map to rank 0, since no JEDI interpolator runs on source-grid partitions.
 
 Both tracegrid interpolators take `max_levels` per variable from `GeometryPyiri::variableSizes()` (was a single `nft + nz` for all variables) and `ASSERT(nlevels <= max_levels)` before copying into the output.
 
@@ -104,6 +107,8 @@ Both tracegrid interpolators take `max_levels` per variable from `GeometryPyiri:
 | `dphi` | (nnyt, nnxp1) | Electrostatic potential |
 | `vexbp` | (nlt, nft, nz) | ExB drift velocity |
 | `f107_msis` | scalar | F10.7 solar flux index |
+
+Densities are SI (PR #201): `FieldsPyiri::read()` asserts the `deni` `units` attribute is `m-3` (via `PyiriDataFile::get_att`), and `ObsOpVtecPyiri` scales electron density to cm-3 before integrating to avoid overflow.
 
 Grid dimensions: `nz` (~16 along field line), `nft` (~9 field lines), `nlt` (~16 longitudes), `nion` (2 species: O+, NO+).
 
@@ -147,6 +152,8 @@ local ensemble DA:
     mult: 1.1
 ```
 
+VTEC tests via UFO `PathSum` (`testinput/hofx3d_vertical_tec.yaml`, `path type: vertical` or `slant`): `height range: [0, 2000000.]` in metres plus `scaling factor: 1.0e-16`; there is no `use km for height` option (PR #206).
+
 ## Source Layout Summary
 
 | Directory | Language | Purpose |
@@ -156,10 +163,11 @@ local ensemble DA:
 | `src/tracegrid_geomag/` | Fortran + C wrapper | Geomagnetic field-line tracing |
 | `src/tracegrid_structured/` | C++ | Structured grid interpolation |
 | `python/PyIRI/` | Python (submodule) | IRI model |
-| `python/pyiri_jedi/` | Python (24 modules) | Adapter layer, CFFI bindings, utilities |
+| `python/pyiri_jedi/` | Python (27 modules) | Adapter layer, CFFI bindings, utilities |
 | `test/mains/` | C++ | oops-interface test drivers |
 | `test/testinput/` | YAML | Test configurations |
 | `test/testref/` | Text | Reference outputs |
+| `test/testdata/model/` | NetCDF | Test data (e.g. gridded VTEC geovals) |
 
 **Split observer/solver test** (PR #161): `test_pyirijedi_split_solver_letkf` runs `pyirijedi_LETKF_ufo` on `testinput/letkf_split_solver.yaml`, which reads a pre-computed ensemble H(x) file (`ens_tec_with_geovals.nc`, produced by `ensemble_tec_writer.py`) via `driver: {read HX from disk: true, do posterior observer: false}`, uses the UFO `Identity` operator on `totalElectronContent` with an empty `obs localizations` list, and updates only `state_vars: [ion_density, f107a_msis]`. Companion tests: `test_pyirijedi_split_observer_tec_writer` (Python) and `test_pyirijedi_grid_points_equal` (C++, `test/mains/grid_points_equal_test.cc`, exercises `GridPoint3` equality).
 

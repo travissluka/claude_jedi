@@ -79,8 +79,8 @@ oops::IgnoreOtherParameters ignoreRest{this};
 #include "oops/util/parameters/Parameter.h"
 #include "oops/util/parameters/RequiredParameter.h"
 
-class MyBlockParameters : public saber::SaberBlockParametersBase {
-  OOPS_CONCRETE_PARAMETERS(MyBlockParameters, saber::SaberBlockParametersBase)
+class MyBlockParameters : public saber::BlockParametersBase {
+  OOPS_CONCRETE_PARAMETERS(MyBlockParameters, saber::BlockParametersBase)
  public:
   oops::RequiredParameter<std::string> fileName{"file name", this};
   oops::Parameter<int> maxIter{"max iterations", 100, this};

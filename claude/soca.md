@@ -1,6 +1,6 @@
 # SOCA (Sea-ice, Ocean, and Coupled Assimilation)
 
-> Last updated against commit `fae9238b` (2026-09-03). Run `cd bundle/soca && git log --oneline fae9238b..HEAD` to see what changed since.
+> Last updated against commit `fa9f5196` (2026-11-03). Run `cd bundle/soca && git log --oneline fa9f5196..HEAD` to see what changed since.
 >
 > **Covers:** soca::Traits, soca::{Geometry,State,Increment,ModelOceanIceEmulator,LinearModelOceanIceEmulator,VariableChange}, ObsLocRossby, SABER SOCA blocks (BkgErrFilt, ParametricOceanStdDev, MLBalance), MOM6 restart format, Icepack sea-ice, `soca::PostProcessIce` + `soca::icephysics` CICE-restart postprocessing, `soca::incrqc::qcIncrement` increment QC, KEmul/IceEmul ML emulators, opaque-handle Fortran pattern (F90geom/F90flds/F90iter/F90model/F90bmat), `soca_io_mod` direct-netCDF reader/writer, `soca_write_jacobian_mod` balance-Jacobian dump.
 
@@ -92,13 +92,18 @@ Two factory hierarchies:
 | `"Model2Ana"` | `Model2Ana` | Model → analysis variables |
 | `"Soca2Cice"` | `Soca2Cice` | SOCA → CICE format (legacy Fortran path, superseded by `PostProcessIce`; still registered and used as the regression baseline) |
 
+No nonlinear soca variable change implements the oops inverse interface (removed, PR #1236): `Soca2Cice` has no `changeVarInverse`, and `Model2Ana::changeVarInverse` survives only as a plain public method (not an override).
+
 VADER is used for generic transforms before falling back to soca-specific ones.
 
 **Linear (TL/AD)** (`LinearVariableChange/`):
 | Registered Name | Class | Purpose |
 |-----------------|-------|---------|
 | `"BalanceSOCA"` | `Balance` | Linearized balance equation (T/S → SSH coupling) |
+| `"Inverse BalanceSOCA"` | `InverseBalance` | Inverse of `Balance` (TL/AD as its own `multiply`/`multiplyAD`) |
 | `"LinearModel2GeoVaLs"` (also `"default"`) | `LinearModel2GeoVaLs` | TL/AD version of Model2GeoVaLs; also the factory fallback |
+
+Linear variable changes have no inverse TL/AD methods (PR #1236, following the oops interface removal). Where an inverse is needed, configure `"Inverse BalanceSOCA"` in an oops `inverse linear variable change:` block alongside the `linear variable change:` block (see `test/testinput/3dvar.yml`, `3dvarfgat_pseudo.yml`).
 
 `Balance` can optionally dump its Kst (T→S) and Ksshts (T/S→SSH) Jacobians to NetCDF via new YAML keys `kst.jacobian_output.filename` and `ksshts.jacobian_output.filename`, written through the new `soca_write_jacobian_mod` (`write_jacobian_to_netcdf`, layered on `soca_io_writer`) — PR #1218.
 
@@ -131,7 +136,7 @@ Three custom SABER outer blocks for background error covariance:
 | `"ParametricOceanStdDev"` | `ParametricOceanStdDev` | Parametric standard deviation |
 | `"MLBalance"` | `MLBalance` | Machine learning balance (Torch, conditional build) |
 
-These are used in SABER outer block chains for ocean error covariance modeling.
+These are used in SABER outer block chains for ocean error covariance modeling. They derive from `saber::OuterBlockBase` with params on `saber::BlockParametersBase` and register via `saber::OuterBlockMaker` (unprefixed names since PR #1258, following saber#1288; saber's `tools/rename_classes.py` also rewrites soca).
 
 ### Obs Localization (`ObsLocalization/`)
 

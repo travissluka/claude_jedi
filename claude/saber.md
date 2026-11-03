@@ -1,8 +1,8 @@
 # SABER (System for Atmospheric and Boundary Layer Error Representation)
 
-> Last updated against commit `9c828faa` (2026-08-27). Run `cd bundle/saber && git log --oneline 9c828faa..HEAD` to see what changed since.
+> Last updated against commit `64b9ea5d` (2026-11-03). Run `cd bundle/saber && git log --oneline 64b9ea5d..HEAD` to see what changed since.
 >
-> **Covers:** SaberCentralBlockBase, SaberOuterBlockBase, SaberParametricBlockChain, SaberEnsembleBlockChain (incl. scale-dependent localization), SaberHybridBlockChain, SaberOuterBlockChain, BUMP_NICAS, Diffusion/DiffusionImpl/DiffusionFilter, FastLAM, Bifourier (incl. BifourierCovarianceImpl/BifourierSpectralConverter/BifourierAnalyticalFilter/BifourierCovarianceSqrt), SpectralCovariance/Correlation/AnalyticalCorrelation, StdDev, VertLoc, DuplicateVariables, ID, GaussToCS, VaderBlock, TorchBalance, GSIBlockChain, QUENCH testbed, ErrorCovariance<MODEL>, ErrorCovarianceToolbox, ProcessPerts, Localization, multiply/multiplyAD/leftInverseMultiply/multiplySqrt/variance, direct/iterative calibration, dirac tests, CoupledErrorCovariance.
+> **Covers:** CentralBlockBase, CentralBlockWrapper, OuterBlockBase, BlockParametersBase, BlockChainBase/BlockChainFactory, ParametricBlockChain, EnsembleBlockChain (incl. scale-dependent localization), HybridBlockChain, OuterBlockChain, BUMP_NICAS, Diffusion/DiffusionImpl/DiffusionFilter, FastLAM, Bifourier (incl. BifourierCovarianceImpl/BifourierSpectralConverter/BifourierAnalyticalFilter/BifourierCovarianceSqrt), SpectralCovariance/Correlation/AnalyticalCorrelation, MGBF_Covariance, StdDev, GeographicalMask, ShadowLevels, VertLoc, DuplicateVariables, ID, GaussToCS, VaderBlock, TorchBalance, GSIBlockChain, QUENCH testbed, ErrorCovariance<MODEL>, ErrorCovarianceToolbox, ProcessPerts, Localization, multiply/multiplyAD/leftInverseMultiply/multiplySqrt/variance, direct/iterative calibration, dirac tests, CoupledErrorCovariance.
 
 ## Overview
 
@@ -14,36 +14,38 @@ SABER's core idea: error covariance operators are built by composing **blocks** 
 
 Build/test quirks (flags, conditional blocks, test structure) in `claude/build-and-test.md`.
 
+**Class naming** (PR #1288): the `Saber` prefix was dropped from all framework classes and their files (`SaberCentralBlockBase` → `CentralBlockBase`, `SaberCentralBlock` → `CentralBlockWrapper`, `SaberOuterBlockBase` → `OuterBlockBase`, `SaberBlockParametersBase` → `BlockParametersBase`, `Saber*Factory`/`Saber*Maker` → `*Factory`/`*Maker`, `Saber*BlockChain` → `*BlockChain`). YAML keys (`saber central block`, `saber outer blocks`, `saber block name`) are unchanged. Migration script: `tools/rename_classes.py` (authoritative mapping; rewrites `src/` of both saber and soca, renaming files too).
+
 ## Core Architecture
 
 ### Block Abstraction
 
 Two base classes define the block interface:
 
-**`SaberCentralBlockBase`** (`src/saber/blocks/`) — Self-adjoint covariance blocks:
+**`CentralBlockBase`** (`src/saber/blocks/`) — Self-adjoint covariance blocks:
 - `randomize()` — generate random sample from covariance
 - `multiply()` — apply B matrix
 - `multiplySqrt()` / `multiplySqrtAD()` — square-root formulation (optional)
 - `directCalibration()` / `iterativeCalibration()` — train from ensemble
 - `read()` / `write()` — I/O for pre-computed parameters
 
-**`SaberOuterBlockBase`** (`src/saber/blocks/`) — Transform/preprocessing blocks:
+**`OuterBlockBase`** (`src/saber/blocks/`) — Transform/preprocessing blocks:
 - `multiply()` / `multiplyAD()` — forward and adjoint application
 - `leftInverseMultiply()` / `rightInverseMultiply()` — inverse transforms
 - `innerGeometryData()` / `innerVars()` — geometry/variable mapping
 
-Configuration base: `SaberBlockParametersBase` — all blocks specify `saber block name` for factory lookup.
+Configuration base: `BlockParametersBase` — all blocks specify `saber block name` for factory lookup.
 
 ### Block Chains
 
 Three chain types compose blocks into full covariance operators:
 
-**`SaberParametricBlockChain`** — Static covariance:
+**`ParametricBlockChain`** — Static covariance:
 - Outer blocks (optional) + one central block
-- Time covariance modes: univariate, duplicated multivariate
-- Config keys: `saber central block`, `saber outer blocks`
+- `time covariance`: `univariate` | `duplicated` (default). With `duplicated`, only time-comm rank 0 builds the central block
+- Config keys: `saber central block`, `saber outer blocks`, `time covariance`
 
-**`SaberEnsembleBlockChain`** — Ensemble-based covariance:
+**`EnsembleBlockChain`** — Ensemble-based covariance:
 - Outer blocks + ensemble data
 - Optional localization via its own block chain
 - Optional **ensemble transform**: chain of outer blocks applied via `rightInverseMultiply()` to ensemble members before covariance computation (any outer block can be used)
@@ -53,17 +55,18 @@ Three chain types compose blocks into full covariance operators:
 - Config keys: `ensemble`, `localization`, `ensemble transform`, `inflation field`, `inflation value`, `denominator for normalizing ensemble covariance`
 - **Scale-dependent localization** (PR #1177): internally the chain is now a `std::vector<ScaleData>`, one per scale, driven by an optional `scales:` YAML list — each entry may set its own `filter`, `interpolator`, `localization`, `output` (`generic write`/`model write`), `ensemble pert`, `ensemble pert on other geometry`, `use residual from filter`, and `localization at full resolution`. Filters split each member into scale bands at construction (recursive subtraction, with an optional interpolator to/from a reduced resolution) mirroring `ProcessPerts`. Top-level `multiscale strategy: separated | crossed` picks the combination rule: `separated` sums `nens × locCtlVec` sizes over scales, `crossed` requires equal per-scale control-vector sizes. `recursive perturbations processing` (renamed from `recursive filters`) and `sub-ensembles size` (per-sub-ensemble mean removal) are also chain-level keys. The ensemble may now legally be empty (a single member is still an error). `ctlVecSize()` is now cached (`ctlVecSize_`). Without `scales:`, localization must still be present (`ASSERT(!params.scales.value())` when localization is absent).
 
-**`SaberHybridBlockChain`** — Weighted combination of multiple covariances:
+**`HybridBlockChain`** — Weighted combination of multiple covariances:
 - Outer blocks + weighted components (each a full covariance + weight)
 - Config key: `components` (array of `covariance` + `weight`)
 - Parallel-mode config key: `comm redistribution method` (string, default `"straight"`) — selects the algorithm for ATLAS field redistribution between parent and sub-communicators when running hybrid components on disjoint rank subsets. Internally calls `util::redistributeToSubcommunicator` / `util::gatherAndSumFromSubcommunicator`, which now delegate to `oops::CommRedistributionRepository` (PR #3196) so redistribution plans are constructed once and cached across multiply/adjoint/randomize calls. Public multiply API is unchanged.
 
-**`SaberOuterBlockChain`** — Sequences outer blocks, handles reverse-order adjoint application. Also used as the implementation basis for **filter blocks**: `NICASFilter`, `DiffusionFilter`, and `SpectralAnalyticalCorrelation` are central blocks that internally wrap a `SaberOuterBlockChain` to apply localization/correlation as a self-contained filter (replacing the older monolithic filter classes).
+**`OuterBlockChain`** — Sequences outer blocks, handles reverse-order adjoint application. Also used as the implementation basis for **filter blocks**: `NICASFilter`, `DiffusionFilter`, and `SpectralAnalyticalCorrelation` are central blocks that internally wrap a `OuterBlockChain` to apply localization/correlation as a self-contained filter (replacing the older monolithic filter classes).
 
-**`SaberCentralBlock`** — Container for multivariate central blocks (wraps one or many concrete central blocks in `groupCentralBlocks_`, enabling e.g. scale-dependent localization):
+**`CentralBlockWrapper`** — Container for multivariate central blocks (wraps one or many concrete central blocks in `groupCentralBlocks_`, enabling e.g. scale-dependent localization):
 - `multivariate strategy` (default `"single"`): `"single"` (one `saber block name`, no `groups:`), `"univariate"`, `"duplicated"` (replicate per variable group), `"duplicated and weighted"` (with off-diagonal weights), `"crossed"`. `"single"` and `groups:` are mutually exclusive.
+- `"crossed"` safety check (PR #1289, `checkCrossedConsistency()`): all groups must have equal `ctlVecSize()` and equal `ctlVecHash()` (asserted). `ctlVecHash()` is a new `CentralBlockBase` virtual identifying the control-vector basis; implemented by BUMP NICAS (`getCvHash`), FastLAM (per layer: `LayerSpec`/`LayerHalo`/`LayerRC`), and Bifourier (`BifourierCovariance`/`BifourierID` via the transform). The default logs a warning and returns `"notImplemented"`, so other blocks skip the basis check.
 - Per-group keys inside `groups:` entries are `group central block` and `group outer blocks` (PR #1284, formerly `saber central block` / `auxiliary outer blocks`). The **top-level** `saber central block` / `saber outer blocks` keys of the chain itself are unchanged.
-- PR #1284 rewrote most of `SaberCentralBlock.cc` but left the **public interface untouched** (no methods added, removed, or renamed); the churn is private (`applyWeights`/`applyWeightsAD` helpers for `"duplicated and weighted"`, `groupOuterBlockChains_`).
+- PR #1284 rewrote most of `CentralBlockWrapper.cc` but left the **public interface untouched** (no methods added, removed, or renamed); the churn is private (`applyWeights`/`applyWeightsAD` helpers for `"duplicated and weighted"`, `groupOuterBlockChains_`).
 
 ### Chain Multiply Order
 
@@ -109,7 +112,7 @@ Control vector size:
 
 ### Variance (diagonal of B)
 
-`SaberBlockChainBase` gained pure-virtual `variance()` and `randomCtlVec()` (PR #1273). `SaberCentralBlockBase::variance()` defaults to `NotImplemented`; `SaberOuterBlockBase::variance(FieldSet3D&)` (transforms an input variance fieldset in place) also defaults to `NotImplemented`. Implementations: NICAS/Diffusion/`IDCentral` report unit variance (1.0 on the diagonal); `StdDev` (both generic and BUMP variants) multiplies by σ²; `Interpolation` gives an approximate diagonal (`T diag(C)`, documented caveat, not exact); hybrid chains sum the weighted component variances (not the parallel-hybrid path); ensemble chains sum over scales (separated strategy only). `SaberOuterBlockChain::applyBackgroundVariance()` propagates the transform innermost-first. Exposed to callers as `ErrorCovariance<MODEL>::variance()`.
+`BlockChainBase` gained pure-virtual `variance()` and `randomCtlVec()` (PR #1273). `CentralBlockBase::variance()` defaults to `NotImplemented`; `OuterBlockBase::variance(FieldSet3D&)` (transforms an input variance fieldset in place) also defaults to `NotImplemented`. Implementations: NICAS/Diffusion/`IDCentral` report unit variance (1.0 on the diagonal); `StdDev` (both generic and BUMP variants) multiplies by σ²; `Interpolation` gives an approximate diagonal (`T diag(C)`, documented caveat, not exact); hybrid chains sum the weighted component variances (not the parallel-hybrid path); ensemble chains sum over scales (separated strategy only). `OuterBlockChain::applyBackgroundVariance()` propagates the transform innermost-first. Exposed to callers as `ErrorCovariance<MODEL>::variance()`.
 
 QUENCH gained a matching test tool: `quenchTestVariance` / `saber_quench_test_variance.x` (new `src/saber/test/Variance.h`), configured with `expected per-point variance` and an optional `monte carlo: {samples, tolerance}` block; tests registered in `test/testlist/saber_variance.cmake`.
 
@@ -128,18 +131,23 @@ inverse test: true           # Verify B⁻¹B = I
 
 | File | Purpose |
 |------|---------|
-| `saber/blocks/SaberBlockChainBase.h` | Abstract chain interface |
-| `saber/blocks/SaberParametricBlockChain.h/.cc` | Parametric implementation |
-| `saber/blocks/SaberEnsembleBlockChain.h/.cc` | Ensemble implementation |
-| `saber/blocks/SaberHybridBlockChain.h` | Hybrid implementation |
-| `saber/blocks/SaberOuterBlockChain.h` | Outer-block sequencer (also backs filter blocks) |
-| `saber/blocks/SaberOuterBlockBase.h` | Outer block interface + factory |
-| `saber/blocks/SaberCentralBlockBase.h` | Central block interface + factory |
+| `saber/blocks/BlockChainBase.h` | Abstract chain interface + `BlockChainFactory`/`BlockChainMaker` |
+| `saber/blocks/ParametricBlockChain.h/.cc` | Parametric implementation |
+| `saber/blocks/EnsembleBlockChain.h/.cc` | Ensemble implementation |
+| `saber/blocks/HybridBlockChain.h` | Hybrid implementation |
+| `saber/blocks/OuterBlockChain.h/.cc` | Outer-block sequencer (also backs filter blocks) |
+| `saber/blocks/OuterBlockBase.h/.cc` | Outer block interface + factory |
+| `saber/blocks/CentralBlockBase.h/.cc` | Central block interface + factory |
+| `saber/blocks/CentralBlockWrapper.h/.cc` | Multivariate central-block container (`groups:`, `multivariate strategy`) |
+| `saber/blocks/BlockParametersBase.h/.cc` | Common block parameters (`saber block name`, ...) |
+| `saber/blocks/instantiateBlockChainFactory.h` | Chain-type registration |
 | `saber/oops/ErrorCovariance.h` | Integration with oops covariance system |
 
 ### OOPS Integration
 
-`ErrorCovariance<MODEL>` (`src/saber/oops/`) inherits `oops::ModelSpaceCovarianceBase<MODEL>` and creates a block chain via `SaberBlockChainFactory<MODEL>::create()`. The factory examines `covariance type` in config (parametric/ensemble/hybrid/gsi).
+`ErrorCovariance<MODEL>` (`src/saber/oops/`) inherits `oops::ModelSpaceCovarianceBase<MODEL>` and creates a block chain via `BlockChainFactory<MODEL>::create()`. The factory examines `covariance type` in config (parametric/ensemble/hybrid/gsi).
+
+Time communicator (PR #1278): `ParametricBlockChain` injects `time communicator rank` / `time communicator size` (from `fset4dXb.commTime()`) into the block config, for block I/O only. BUMP forwards them to its Fortran namelist; when the time size is >1, created NetCDF files get a `_time_<size>-<rank>` suffix so 4D runs write per-time-slot files.
 
 SABER operates on `atlas::FieldSet` — it converts `MODEL::Increment` via the model's `toFieldSet()`/`fromFieldSet()` methods. This is why SABER works with any model without knowing model internals.
 
@@ -150,9 +158,9 @@ Other OOPS integration:
 
 ### Factory Pattern
 
-- `SaberCentralBlockFactory` / `SaberCentralBlockMaker<T>` — central blocks by name
-- `SaberOuterBlockFactory` — outer blocks by name
-- `SaberBlockChainFactory<MODEL>` / `SaberBlockChainMaker<MODEL,T>` — chain types
+- `CentralBlockFactory` / `CentralBlockMaker<T>` — central blocks by name
+- `OuterBlockFactory` / `OuterBlockMaker<T>` — outer blocks by name
+- `BlockChainFactory<MODEL>` / `BlockChainMaker<MODEL,T>` — chain types
 - Registration via `instantiateCovarFactory.h`, `instantiateLocalizationFactory.h`
 
 ## QUENCH Testbed (`quench/`)
@@ -166,12 +174,13 @@ Not a block — a pseudo-model for testing SABER blocks with any ATLAS grid. Imp
 | Block | Purpose |
 |-------|---------|
 | `ID` | Identity pass-through (central + outer variants) |
-| `StdDev` | Standard deviation scaling; reads from profile/ATLAS/model files; supports iterative calibration |
+| `StdDev` | Standard deviation scaling; reads from profile/ATLAS/model files; supports iterative calibration. Global multiplier key is `scale factor` (was `stddev scale factor`, PR #1319). Per-variable entries in `standard deviations` take `stddev` without `read`, or `scale factor` with `read` (per-variable scaling of file-read stddev; also applied in `variance()`) |
+| `GeographicalMask` | Splits each active variable into per-mask copies `<var><suffix>` (inner vars); `multiply` sums them back weighted by each mask's weight field. Weights come from `mask variable` + per-mask `relational operator`/`threshold`, or from `input weight file` (`input mask file`/`output weight file` also available); `masks:` list under `read:`/`calibration:` (PR #1272) |
 | `DuplicateVariables` | Duplicates variables onto multiple vertical levels |
 | `VertLoc` | Vertical localization (24KB impl) |
 | `VertLocInterp` | Vertical localization with interpolation |
 | `OrographicInterp` | Orographic interpolation |
-| `ShadowLevels` | Extra/shadow level handling |
+| `ShadowLevels` | Maps variables onto shadow levels (inner vars `<var><suffix>`). Config (under `read:`/`calibration:`) is a required `groups:` list; each group: `variables` (required), `number of shadow levels` (required), optional `group name`, `suffix` (default `_shadowLevels`), `vertical length-scale`, `component weight` (default 1.0). Block-level `input weight file`/`output weight file` (PR #1271) |
 | `WriteFields` | Output intermediate fields for debugging; "Wrote file"/"Did NOT write file" messages log to the info stream, not the test stream (PR #1259). Uses `functionSpace().grid().name()` for the grid name under `ATLAS_VERSION_46_OR_GREATER` parallel IO (PR #1263) |
 | `ResidualFields` | Reads a FieldSet from `input path` (optional `parallel IO`) for filtering; `multiply fset filename` debug output (PR #1244); same grid-name handling for parallel IO (PR #1263) |
 
@@ -213,13 +222,13 @@ The biperiodization step's `inner partitioner` YAML key is **optional** (PR #125
 
 ### `fastlam/` — Fast Limited Area Model correlation (requires FFTW)
 
-Main block: `FastLAM` (59KB impl). Layer types: `LayerSpec` (spectral), `LayerHalo`, `LayerRC` (regional covariance). Supports iterative calibration. As of PR #1176, square-root-based central blocks (incl. FastLAM) route randomization through a new `randomCtlVec(field, member)` virtual rather than overriding `randomize`/`multiply` directly; `randomize`/`multiply` are no longer pure-virtual on `SaberCentralBlockBase` (base defaults provided); FastLAM caches `ctlVecSize_`. Backed by the internal `saber/util/Randomization` helper (`util::randomCtlVec`). PR #1248 added a `"duplicated and weighted"` multivariate strategy (alongside `"duplicated"`/`"crossed"`) with weighted cross-variable correlations, plus YAML params `sampling horizontal length-scale`, `sampling vertical length-scale`, `inner grid-point function space from background variable`, `default off-diagonal weight`, and `specific off-diagonal weights`; internally the reduction-factor getters (`rfh`/`rfv`) gave way to sampling length-scales (`srh`/`srv`) and explicit grid dims (`nx`/`ny`/`nz`).
+Main block: `FastLAM` (59KB impl). Layer types: `LayerSpec` (spectral), `LayerHalo`, `LayerRC` (regional covariance). Supports iterative calibration. As of PR #1176, square-root-based central blocks (incl. FastLAM) route randomization through a new `randomCtlVec(field, member)` virtual rather than overriding `randomize`/`multiply` directly; `randomize`/`multiply` are no longer pure-virtual on `CentralBlockBase` (base defaults provided); FastLAM caches `ctlVecSize_`. Backed by the internal `saber/util/Randomization` helper (`util::randomCtlVec`). PR #1248 added a `"duplicated and weighted"` multivariate strategy (alongside `"duplicated"`/`"crossed"`) with weighted cross-variable correlations, plus YAML params `sampling horizontal length-scale`, `sampling vertical length-scale`, `inner grid-point function space from background variable`, `default off-diagonal weight`, and `specific off-diagonal weights`; internally the reduction-factor getters (`rfh`/`rfv`) gave way to sampling length-scales (`srh`/`srv`) and explicit grid dims (`nx`/`ny`/`nz`).
 
 PR #1257 fixed the `srh`/`srv` sampling length-scale calculation: `srh` now normalizes via the average of `1/minCellSize + 1/maxCellSize` (was a straight average of the cell sizes), and `srv` (when positive) is now rescaled through the same thickness-normalization used for `rv` rather than copied raw from YAML. `"duplicated and weighted"` handling was also extended into `setupCtlVecSize`/`setupGlbIndex` (previously only `"univariate"`/`"duplicated"` were handled there). Vertical convolution/normalization in `LayerHalo`/`LayerRC`/`LayerSpec` is now gated on `zKernelSize_ > 1`, not just `nz_ > 1`.
 
 ### `diffusion/` — Diffusion localization, explicit + implicit vertical (C++ only)
 
-`Diffusion` block (28KB impl). Better than NICAS for small correlation length-scales. Direct calibration from ensemble. Filter mode support. Implementation split: `DiffusionImpl` handles the core diffusion math, `Diffusion` wraps it as a central block. `DiffusionFilter` wraps it as a `SaberOuterBlockChain`-based filter.
+`Diffusion` block (28KB impl). Better than NICAS for small correlation length-scales. Direct calibration from ensemble. Filter mode support. Implementation split: `DiffusionImpl` handles the core diffusion math, `Diffusion` wraps it as a central block. `DiffusionFilter` wraps it as a `OuterBlockChain`-based filter.
 
 **Vertical scheme selection** (saber #1234, paired with oops #3275): the YAML `vertical:` block selects between the default explicit scheme and an implicit Mirouze–Weaver scheme:
 ```yaml
@@ -238,10 +247,14 @@ vertical:
 | `SpectralCovariance` / `SpectralCorrelation` | Spectral covariance/correlation |
 | `SpectralToGauss` | Spectral to Gaussian grid (31KB) |
 | `SpectralAnalyticalFilter` | Analytical filter (legacy, being replaced by `SpectralAnalyticalCorrelation` + filter-as-chain) |
-| `SpectralAnalyticalCorrelation` | Analytical correlation central block (new, used with `SaberOuterBlockChain` filter pattern) |
+| `SpectralAnalyticalCorrelation` | Analytical correlation central block (new, used with `OuterBlockChain` filter pattern) |
 | `GaussUVToGP` | Wind to geopotential |
 | `HydrostaticPressure` | Hydrostatic pressure transform |
 | `SqrtOfSpectralCovariance` / `SqrtOfSpectralCorrelation` | Square-root forms |
+
+### `mgbf/`: Multigrid Beta Filter covariance (NOAA Fortran library + C++ wrapper)
+
+`MGBF_Covariance` central block (`MGBF_covariance`, PR #1227) wraps the bundled MGBF Fortran library (`mgbf_lib/`, builds `mgbflib`, linked into saber). Params: `mgbf namelist file`, `mgbf sdl and vdl init namelist file`, `debug print`. CMake `ENABLE_MGBF` (default ON) gates the library, the block, and the `mgbf` tests. Only test, `saber_dirac_mgbf_1` (4 MPI, QUENCH toolbox), carries the `ci_flake_disable` label.
 
 ### `vader/` — VADER variable transformation integration (40+ files)
 
@@ -263,7 +276,7 @@ Temperature handling (PR #1254): `svfix_` does **no** JEDI-side `tv` → `t` con
 
 ## Fortran vs C++ Split
 
-- **Fortran-heavy**: BUMP (58 `.fypp` templates generating `.F90`), some spectralb and vader interfaces
+- **Fortran-heavy**: BUMP (58 `.fypp` templates generating `.F90`), MGBF (`mgbf_lib/`), some spectralb and vader interfaces
 - **C++ only**: blocks framework, generic blocks, bifourier, fastlam, diffusion, interpolation, torchbalance, OOPS integration
 - **Interop**: C++ calls Fortran via `type_bump.h` wrapper; `.fypp` templates preprocessed to `.F90`
 
@@ -303,6 +316,7 @@ Central blocks (used as `saber central block: { saber block name: "<name>" }`):
 | `BifourierID` | BifourierID | bifourier/ |
 | `FastLAM` | FastLAM | fastlam/ |
 | `gsi static covariance` | Covariance | gsi/ |
+| `MGBF_covariance` | MGBF_Covariance | mgbf/ |
 | `ID` | ID | generic/ |
 
 Outer blocks (used in `saber outer blocks: [{ saber block name: "<name>" }]`):
@@ -316,6 +330,7 @@ Outer blocks (used in `saber outer blocks: [{ saber block name: "<name>" }]`):
 | `ID` | ID | generic/ |
 | `VertLoc` | VertLoc | generic/ |
 | `ShadowLevels` | ShadowLevels | generic/ |
+| `GeographicalMask` | GeographicalMask | generic/ |
 | `duplicate variables` | DuplicateVariables | generic/ |
 | `OrographicInterp` | OrographicInterp | generic/ |
 | `write fields` | WriteFields | generic/ |

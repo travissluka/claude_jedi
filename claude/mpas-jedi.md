@@ -1,6 +1,6 @@
 # MPAS-JEDI
 
-> Last updated against commit `c709a5ab` (2026-08-27). Run `cd bundle/mpas-jedi && git log --oneline c709a5ab..HEAD` to see what changed since.
+> Last updated against commit `59e808cb` (2026-11-03). Run `cd bundle/mpas-jedi && git log --oneline 59e808cb..HEAD` to see what changed since.
 >
 > **Covers:** mpas::Traits, mpas::{Geometry,State,Increment,Model,LinearModel,VariableChange}, unstructured Voronoi mesh, MPAS 8.0 core_atmosphere integration, variable-resolution support, RTTOV/ROPP-UFO optional operators, opaque-handle Fortran pattern.
 
@@ -8,7 +8,7 @@
 
 Interface between JEDI and the Model for Prediction Across Scales (MPAS) atmospheric model. MPAS uses an unstructured Voronoi mesh (variable-resolution capability). Source at `bundle/mpas-jedi/`. Version 3.1.0. C++17/Fortran 2008.
 
-Build/test quirks (MPAS 8.0 `core_atmosphere`, optional RTTOV/ROPP-UFO) in `claude/build-and-test.md`. Test categories: 3dvar, 3denvar, 4denvar, EDA, error covariance, dirac. Offline covariance processing scripts in `test/covariance/`.
+Build/test quirks (MPAS 8.0 `core_atmosphere`, optional RTTOV/ROPP-UFO) in `claude/build-and-test.md`. Test categories: 3dvar, 3denvar, 4denvar, EDA, surface DA (`3dvar_tq2m`), error covariance, dirac (incl. multiscale BUMP/diffusion localization: `dirac_multiscale_{bump,diffusion}_loc`), `process_perts_diffusion`. Offline covariance processing scripts in `test/covariance/`.
 
 ## OOPS Traits (`src/mpasjedi/Traits.h`)
 
@@ -54,11 +54,14 @@ TL/AD model. Stores trajectory as `std::map<DateTime, F90traj>`. Methods: `setTr
 
 **Nonlinear** (`VariableChange/`):
 - **Model2GeoVars** — model variables (theta, rho, u) ↔ geophysical variables (T, qv, wind)
+- Tropopause pressure: `tropopause pressure method: thompson` (default) or `wmo`. Only read when set inside a `get values: variable change:` block that names `variable change name:` explicitly (e.g. `default`); otherwise oops ignores the block (#1238).
 - Factory-based: `VariableChangeFactory` with `VariableChangeMaker<T>` registration
 
 **Linear** (`LinearVariableChange/`):
 - **Control2Analysis** — 2D surface pressure → 3D pressure/temperature (hydrostatic balance)
+- **Analysis2Control** (`LinVarChaA2C`)
 - **Model2GeoVars** — linear version with TL/AD
+- No inverse TL/AD methods (`changeVarInverseTL/AD` removed, #1178)
 - Factory-based with trajectory support
 
 ### ErrorCovariance (`Covariance/`)

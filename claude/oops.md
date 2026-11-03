@@ -1,8 +1,8 @@
 # OOPS (Object Oriented Prediction System)
 
-> Last updated against commit `03b99d13` (2026-09-03). Run `cd bundle/oops && git log --oneline 03b99d13..HEAD` to see what changed since.
+> Last updated against commit `26cd7165` (2026-11-03). Run `cd bundle/oops && git log --oneline 26cd7165..HEAD` to see what changed since.
 >
-> **Covers:** Variational, CostFunction, CostFct3DVar/3DFGAT/4DVar/WC4DVar/4DEnsVar, CostJo, CostJb3D/4D/Jq, Minimizer (PCG/DRPCG/FGMRES/RPCG/...), LocalEnsembleSolver, LETKF/GETKF (Deterministic/Stochastic), SequentialEnsembleSolver/EAKF, LocalEnsembleDA, Observer, Observers, Variables, FieldSet3D/4D, FieldSets, IncrementSet, StateSet, GeometryData, PseudoModel, CommRedistribution, CommRedistributionRepository, FieldSetSubCommunicators, Application runs (Forecast/HofX/EDA/GenEnsPertB/...), inflation (RTPP/RTPS/mult), cross-validation, Nerger regulation, implicit/explicit Diffusion, L95/QG toy models.
+> **Covers:** Variational, CostFunction, CostFct3DVar/3DFGAT/4DVar/WC4DVar/4DEnsVar, CostJo, CostJb3D/4D/Jq, Minimizer (PCG/DRPCG/FGMRES/RPCG/...), LocalEnsembleSolver, LETKF/GETKF (Deterministic/Stochastic), SequentialEnsembleSolver/EAKF, LocalEnsembleDA, Observer, Observers, Variables, FieldSet3D/4D, FieldSets, IncrementSet, StateSet, GeometryData, ProximitySearch/MeshTriangulation/InterpolationCache, Nonlinear/LinearEnsembleObservers, PseudoModel, CommRedistribution, CommRedistributionRepository, FieldSetSubCommunicators, Application runs (Forecast/HofX/EDA/GenEnsPertB/...), inflation (RTPP/RTPS/mult), cross-validation, Nerger regulation, implicit/explicit Diffusion, L95/QG toy models.
 
 ## Overview
 
@@ -19,7 +19,7 @@ Build/test quirks in `claude/build-and-test.md`.
 | `assimilation/` | DA algorithms: cost functions (`CostFunction`, `CostFct3DVar`, `CostFct4DEnsVar`), minimizers (17 total), and local ensemble solvers (5 total). |
 | `runs/` | Top-level `Application` subclasses that serve as entry points: `Variational`, `Forecast`, `LocalEnsembleDA`, `HofX3D`, `HofX4D`, `EDA`, etc. Each `Application::execute()` reads a YAML config and runs end-to-end. |
 | `generic/` | Model-independent implementations: `IdentityModel`, `HybridLinearModel`, `AtlasInterpolator`, `UnstructuredInterpolator` (triangulation-based; supports nearest-neighbor fill outside regional domains via YAML key `regional nn fill distance in km` — chord distance; the `regional check enabled` flag and its `isRegional()`-based bypass were removed in PR #3313), `Diffusion` (Weaver & Courtier 2001 explicit horizontal + Mirouze & Weaver 2010 implicit vertical via `VerticalMethod::{Explicit,Implicit}`; explicit is the default and bit-for-bit identical to prior behavior — PR #3275; when no area field is precomputed it estimates per-node control-volume area via median-dual (barycentric lumped) cell area and uses an `aspectRatio·inv_area` explicit-stability iteration bound, replacing the old edge-length average / `1/edgeLength²` and staying stable on irregular NodeColumns while unchanged on uniform quads — PR #3319; `calculateDerivedGeom_NodeColumns` tolerates empty partitions for multi-PE obs-space diffusion — PR #3311; public accessor `Diffusion::inverseArea()` exposes the per-node 1/area field — PR #3326), FFT utilities, HTLM tools. |
-| `util/` | Utilities: `DateTime`, `Duration`, `Logger`, `ConfigFunctions` (PR #3336 reworked emptiness handling: `isVector`/`isFinal` now exclude empty configs, `seekAndReplace` no-ops on an empty pattern, and `mergeConfigs` merges vectors as `LocalConfiguration` sub-configs rather than string vectors, which had corrupted non-string sequences; when config2's entry is empty, config1's vector is copied through), MPI helpers, Fortran interop. Includes `Factory.h` (generic factory template with variadic maker args) and `FunctionSpaceHelpers.h` (`getSizeOwned`, `countOwned`, `executeFunc` dispatcher over concrete ATLAS function-space types; the `isRegional` helper was removed in PR #3313 along with the `UnstructuredInterpolator` regional-check flag). |
+| `util/` | Utilities: `DateTime`, `Duration`, `Logger` (`oops::Log::warning()` lines are prefixed `OOPS_WARNING`; env var `OOPS_LOG_TIMESTAMPS=1` timestamps the log channels, read in `LibOOPS.cc`), `ConfigFunctions` (PR #3336 reworked emptiness handling: `isVector`/`isFinal` now exclude empty configs, `seekAndReplace` no-ops on an empty pattern, and `mergeConfigs` merges vectors as `LocalConfiguration` sub-configs rather than string vectors, which had corrupted non-string sequences; when config2's entry is empty, config1's vector is copied through), MPI helpers, Fortran interop. Includes `Factory.h` (generic factory template with variadic maker args) and `FunctionSpaceHelpers.h` (`getSizeOwned`, `countOwned`, `executeFunc` dispatcher over concrete ATLAS function-space types; the `isRegional` helper was removed in PR #3313 along with the `UnstructuredInterpolator` regional-check flag). |
 | `util/redistribution/` | `CommRedistribution` (abstract) for repartitioning ATLAS fields between parent/sub communicators. Concrete: `CommGatherScatterRedistribution` (gather-scatter) and `CommStraightRedistribution` (direct MPI `allToAllv` with global-index mapping, cached for reuse — uses `detail/AllToAllRouting` helper). `CommRedistributionCompatChecker` validates compatibility. `CommRedistributionRepository` (PR #3196) is a multiton cache keyed on (parent FunctionSpace, sub FunctionSpace, method string); callers obtain an existing plan via `get()` instead of reconstructing the (costly) redistribution each call. |
 | `mpi/` | MPI communicator management for ensemble/model decomposition. `ColorInfo` analyzes MPI color grouping in split communicators. `Scope` provides RAII temporary communicator switching. |
 | `atlas/` | Atlas-based interpolation wrappers. |
@@ -28,7 +28,7 @@ Build/test quirks in `claude/build-and-test.md`.
 
 **`oops::Variables`** (`base/Variables.h`) — Container of `Variable` objects (no duplicates). Each `Variable` has a name, `VariableMetaData` (vertical stagger: CENTER/INTERFACE/TOP_INTERFACE/BOTTOM_INTERFACE/CENTER_WITH_TOP; data type: Real64 default; domain: Atmosphere/Ocean/Land), and optional vertical level count. Supports set operations (`+=`, `-=`, `intersection`), subset check (`<=`), and STL iteration.
 
-**`oops::FieldSet3D`** (`base/FieldSet3D.h`) — Wraps `atlas::FieldSet` with a valid time and MPI communicator. Key methods: `deepCopy()`, `shallowCopy()`, `zero()`, arithmetic (`+=`, `-=`, `*=`, `/=`), `dot_product_with()`, `norm()`, `read()`/`write()`, `serialize()`/`deserialize()`. Access fields by index, name, or `Variable` object.
+**`oops::FieldSet3D`** (`base/FieldSet3D.h`) — Wraps `atlas::FieldSet` with a valid time and MPI communicator. Key methods: `deepCopy()`, `shallowCopy()`, `zero()`, arithmetic (`+=`, `-=`, `*=`, `/=`, `axpy(a, other)`), `dot_product_with()`, `norm()`, `read()`/`write()`, `serialize()`/`deserialize()`. Access fields by index, name, or `Variable` object.
 
 **`oops::FieldSet4D`** (`base/FieldSet4D.h`) — Collection of `FieldSet3D` objects across time steps. Used for 4D increments and ensemble members. Can be constructed from `State4D` or `Increment4D`.
 
@@ -38,7 +38,15 @@ Build/test quirks in `claude/build-and-test.md`.
 
 **`oops::StateSet`** (`base/StateSet.h`) — Collection of `State<MODEL>` objects distributed across time steps and ensemble members. Extends `DataSetBase<State<MODEL>, Geometry<MODEL>>`. Replaces the retired `StateEnsemble` and `StateEnsemble4D` classes (removed in PR #3147). Provides `ens_mean()` to compute ensemble mean and `transpose()` to redistribute states across communicators.
 
-**`oops::GeometryData`** (`base/GeometryData.h`) — Provides spatial queries on model grids: `closestTask(lat, lon)`, `closestPointWithinRadius(lat, lon, radius_m)` (returns task-local index of the globally-nearest owned point within the chord-distance radius, or `nullopt`), `containingTriangleAndBarycentricCoords()`, KD-tree indexing (global node tree now keyed on `(idx, idx)` pairs to support cross-task lookups). Not a model interface — it's a utility wrapping ATLAS function spaces.
+**`oops::GeometryData`** (`base/GeometryData.h`): Thin wrapper holding an ATLAS `FunctionSpace`, a `FieldSet` (`has()`/`getField()`), the MPI comm, and `levelsAreTopDown()`. No spatial queries or KD-trees; those live in the `generic/` registries below. Not a model interface.
+
+**Spatial-query registries** (`generic/`, PR #3333): Process-local caches keyed by grid identity (comm name + grid UID + lon/lat hash), so interpolators on the same source geometry share one build. Construction is MPI-collective: call the getters uniformly on all ranks, outside loops.
+- `ProximitySearch` (`getProximitySearch(fspace, comm)`): global KD-tree; `taskOwningClosestPoint(lat, lon)`, `closestPointWithinRadius(lat, lon, radius)` (task-local index of the globally-nearest owned point within the chord-distance radius, or `nullopt`).
+- `MeshTriangulation` (`getMeshTriangulation(fspace, comm)`): mesh + local tree; `containingTriangleAndBarycentricCoords()`.
+- `SourceProximityPartitioner` (`makeSourceProximityPartitioner(fspace, comm)`): handle to a shared `ProximitySearch`; `interpolatingTask(lat, lon)` maps a target point to the task owning the nearest source point.
+- `InterpolationCache`: lazily builds and caches `atlas::Interpolation` objects keyed by target mask (used by `AtlasInterpolator`).
+
+`UnstructuredInterpolator` holds references to the shared `MeshTriangulation` and `ProximitySearch`.
 
 ## Toy Models
 
@@ -100,11 +108,13 @@ Every variational cost function minimizes `J(x) = Jb + Jo [+ Jc]` where Jb is th
 
 **Jo** (`CostJo.h`): runs observers, loads `ObsValue`, computes departures `H(x)-y`, applies `R⁻¹` to get gradient, returns `½ ydep · gradFG`. Rejected obs (qcflag != 0 → obs error masked to missing) are skipped via missing-value propagation in `ObsVector` arithmetic and `dot_product_with`.
 
-**`ObsSpaces` construction** (PR #3358, breaking): `ObsSpaces<OBS>` now takes the *whole* `observations:` section rather than the `observers:` list. The obs-space specs must sit under an `observers:` key; if it is absent the constructor throws `eckit::UserError`. Keys placed directly under `observations:` become per-obs-space defaults, applied by `detail::applyObsSpaceDefaults` in `base/ObsSpaces.h`. The first such key is `obs data container: ObsGroup|OSDF`, which sets each space's `use data frame container` bool unless that space already specifies it (obs-space-level setting wins). `CostJo`, `HofX3D`, `HofX4D`, and `LocalEnsembleDA` were all updated to pass the full section. `test/interface/ObsTestsFixture.h` still accepts the old bare-sequence form but logs a deprecation warning.
+**`ObsSpaces` construction** (PR #3358, breaking): `ObsSpaces<OBS>` now takes the *whole* `observations:` section rather than the `observers:` list. The obs-space specs must sit under an `observers:` key; if it is absent the constructor throws `eckit::UserError`. Keys placed directly under `observations:` become per-obs-space defaults, applied by `detail::applyObsSpaceDefaults` in `base/ObsSpaces.h`. Recognized keys: `obs data container: ObsGroup|OSDF` (sets each space's `use data frame container` bool) and `max io pool size: <int>` (sets each space's `io pool.max pool size`, must be >= 1; PR #3419). Obs-space-level settings always win. `ObsSpaces::redistribute(config)` re-decomposes each space whose obs-space config has a `redistribution` sub-config (refuses while any `ObsDataVector` is still attached). `CostJo`, `HofX3D`, `HofX4D`, and `LocalEnsembleDA` were all updated to pass the full section. `test/interface/ObsTestsFixture.h` still accepts the old bare-sequence form but logs a deprecation warning.
 
 **Non-const obs aux during H(x)** (PR #3367): `ObsOperatorBase::simulateObs`, `interface::ObsOperator::simulateObs`, and `Observer(s)::initialize` take `ObsAuxControl_ &` **non-const**, so an obs operator may initialize its bias coefficients while computing H(x) (see the ufo VarBC cold start). `CostJo::setPostProc` `const_cast`s `xx.obsVar()`, and `LocalEnsembleSolver::computeHofX` drops `const` on its `ObsAux_`. `CostJbObsAux` reads `obs bias.cold start.enable` per obs space and, on the first outer loop, adopts the cold-started coefficients as the Jb background so Jb does not pull them back toward zero. This changes the `OBS::ObsOperator::simulateObs` signature every downstream implementation must match.
 
 **Outer/inner loops** (`Variational::execute`): outer loop does NL model eval + relinearization of B/TLM/H; inner loop runs the minimizer against the linearized problem to produce δx; update `x ← x + δx`; repeat.
+
+**Variational outputs** (PR #3374): a top-level `final:` block is rejected (`ASSERT`), as are `output.prints`, `output.increment to structured grid`, and `output.analysis to structured grid`. Outputs live under `output:`; `output.increment` and `output.analysis` each take one config or a list. `IncrementalAssimilation` dispatches each entry on `grid type` (default `native`): increments go to `IncrementWriter` (native) or `StructuredIncrementWriter`, analyses to `StateWriter` (native) or `StructuredStateWriter`. `output.do not evaluate o minus a: true` writes without O-A. Diagnostic `prints` sit under `variational:`.
 
 ## Ensemble Inflation Options
 
@@ -156,7 +166,13 @@ driver:
   save posterior ensemble: true
   save prior variance: false
   save posterior variance: false
+local ensemble DA:
+  use linear observer: false      # true: H linearized about the ensemble mean (Shlyaeva & Whitaker 2018)
 ```
+
+**Ensemble observers** (`base/`): `EnsembleObserversBase` with two implementations selected by `use linear observer`: `NonlinearEnsembleObservers` (default, nonlinear H per member) and `LinearEnsembleObservers` (nonlinear H on the mean plus `ObserversTLAD` applied to perturbations). Both also handle GETKF modulated-ensemble H(x).
+
+**Obs redistribution** (PR #3342): an obs space opts in with an `obs space.redistribution` sub-config (requires the dataframe ioda backend); `LocalEnsembleDA` fills in its patch `center`/`radius` (as it does for a Halo `distribution`) and calls `obsdb.redistribute()` after the prior H(x), so a one-step L/GETKF can compute H(x) on one decomposition and solve on the patch decomposition. Prior QC flags are saved and carried to the posterior observer.
 
 ## Factory Pattern
 

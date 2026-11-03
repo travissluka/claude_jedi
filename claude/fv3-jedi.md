@@ -1,6 +1,6 @@
 # FV3-JEDI
 
-> Last updated against commit `16abb0b4` (2026-08-27). Run `cd bundle/fv3-jedi && git log --oneline 16abb0b4..HEAD` to see what changed since.
+> Last updated against commit `a16d09c8` (2026-11-03). Run `cd bundle/fv3-jedi && git log --oneline a16d09c8..HEAD` to see what changed since.
 >
 > **Covers:** fv3jedi::Traits, fv3jedi::{Geometry,State,Increment,Model,LinearModel,VariableChange,LinearVariableChange,ModelBias,ModelData}, FV3_FORECAST_MODEL backends (GEOS/UFS/FV3CORE), cubed-sphere geometry, LAM support, FV3LM linear model, GFS/GEOS I/O backends, FV3-JEDI/FMS interop, opaque-handle Fortran pattern, VertRemap (lapse-rate vertical remap after horizontal interpolation).
 
@@ -61,7 +61,10 @@ Interface: `initialize(State&)`, `step(State&, ModelBias&)`, `finalize(State&)`.
 ### Variable Changes (`VariableChange/`, `LinearVariableChange/`)
 `VariableChange` chains VADER with fv3jedi-specific transforms:
 - **Control2Analysis** — control variables → analysis variables
+- **Analysis2Control**: analysis variables → control variables (NL `VarChaA2C`, linear `LinVarChaA2C` in `LinearVariableChange/Control2Analysis/`)
 - **Model2GeoVaLs** — model grid → observation locations
+
+No `changeVarInverse*` methods: inverse transforms are separate named variable changes (#1498).
 
 Fortran helper modules in `Utils/`: `pressure_variables_mod.f90`, `temperature_variables_mod.f90`, `moisture_variables_mod.f90`, `height_variables_mod.f90`, `wind_variables_mod.f90`, `surface_variables_mod.f90`.
 
@@ -79,6 +82,8 @@ FEMPS (Finite Element Multigrid Pressure Solver) in `femps/` for geopotential ca
 - **StructuredGrid** (`IOStructuredGrid`) — interpolated regular lat/lon via GlobalInterpolator
 
 Config key: `filetype` in YAML (`fv3 restart`, `cube sphere history`, `structured grid`).
+
+FV3Restart regional single-tile path: `use_fms_lib: false` (single tile only) bypasses FMS and uses native parallel NetCDF, with `m_TwoPhaseScatterGather.f90` doing slab scatter/gather and `module_fv3lam_stats.f90` scanning level/type info. Keys (regional path only): `write into existing files` (reuse existing file metadata), `default output resolution` (`native`/`32bit`/`64bit`), `lustre stripe size` (bytes), `max io batch size` (slabs in flight, 0 = one per node) (#1514).
 
 `IOStructuredGrid` supports vertical remapping on write via `do vertical remapping: true` + `orography filename: <nc>`; it reads the target orography through a new `readStructuredFields()` NetCDF path and applies `VertRemap` before writing.
 

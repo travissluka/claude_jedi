@@ -65,7 +65,7 @@ void Fields::fromFieldSet(const atlas::FieldSet & fset) {
 SABER blocks operate on `oops::FieldSet3D` (a thin wrapper around `atlas::FieldSet` with valid time):
 
 ```cpp
-// saber/src/saber/blocks/SaberOuterBlockBase.h
+// saber/src/saber/blocks/OuterBlockBase.h
 virtual void multiply(oops::FieldSet3D &) const = 0;
 virtual void multiplyAD(oops::FieldSet3D &) const = 0;
 ```

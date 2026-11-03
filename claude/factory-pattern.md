@@ -148,9 +148,9 @@ int main(int argc, char ** argv) {
 
 | Factory | Registered Types | YAML Key |
 |---------|-----------------|----------|
-| `SaberOuterBlockFactory` | `"StdDev"`, `"BUMP_NICAS"`, `"Diffusion"`, `"SOCABkgErrFilt"`, etc. | `saber block name:` |
-| `SaberCentralBlockFactory` | `"BUMP_NICAS"`, `"spectral covariance"`, etc. | `saber block name:` |
-| `SaberBlockChainFactory<MODEL>` | `"ensemble"`, `"hybrid"`, `"parametric"` | `covariance model:` |
+| `OuterBlockFactory` | `"StdDev"`, `"BUMP_NICAS"`, `"Diffusion"`, `"SOCABkgErrFilt"`, etc. | `saber block name:` |
+| `CentralBlockFactory` | `"BUMP_NICAS"`, `"spectral covariance"`, etc. | `saber block name:` |
+| `BlockChainFactory<MODEL>` | `"ensemble"`, `"hybrid"`, `"parametric"` | `covariance model:` |
 
 ### UFO factories
 
@@ -247,6 +247,6 @@ Each `instantiate*Factory<MODEL>()` creates Makers for that specific MODEL type.
 | `ufo/ObsOperatorBase.h` | Obs operator factory |
 | `ufo/ObsFilterBase.h` | Filter factory |
 | `ufo/instantiateObsFilterFactory.h` | 100+ filter registrations |
-| `saber/blocks/SaberOuterBlockBase.h` | SABER outer block factory |
-| `saber/blocks/SaberCentralBlockBase.h` | SABER central block factory |
+| `saber/blocks/OuterBlockBase.h` | SABER outer block factory |
+| `saber/blocks/CentralBlockBase.h` | SABER central block factory |
 | `saber/oops/instantiateCovarFactory.h` | SABER covariance chaining |

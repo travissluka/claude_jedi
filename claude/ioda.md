@@ -1,6 +1,6 @@
 # IODA (JEDI Interface for Observation Data Access)
 
-> Last updated against commit `7acc53ad` (2026-09-03). Run `cd bundle/ioda && git log --oneline 7acc53ad..HEAD` to see what changed since.
+> Last updated against commit `ba8e8ccb` (2026-11-03). Run `cd bundle/ioda && git log --oneline ba8e8ccb..HEAD` to see what changed since.
 >
 > **Covers:** ObsSpace, ObsVector, ObsDataVector, Distribution (RoundRobin/Halo/Inefficient), ObsIterator, DistributionUtils (dot_product, missing-value handling), ioda_engines two-layer design, ObsGroup, ObsStore, HDF5/in-memory/ODB/BUFR backends, OSDF containers, `observations:`/`observers:` YAML shape, Fortran/Python bindings.
 
@@ -36,11 +36,11 @@ Storage backends (engines):
 Reader/Writer factory pattern: `ReaderBase`/`WriterBase` with `ReaderFactory`/`WriterFactory` for engine selection at runtime. `missing file action` (`"error"` default, or `"warn"`) lives on `ReaderParametersBase`, so every reader backend honors it (PR #1812), including the OSDF reader path (`reader/ObsReader.cpp`, `load/loadObsFromNetcdf.cpp`, `load/loadObsFromOdb.cpp`, which raise `eckit::ReadError`); it is not an H5File-only key.
 
 **`ioda`** (`src/`) — Higher-level JEDI/oops interface:
-- `ioda::ObsSpace` — main class; extends `oops::ObsSpaceBase`; manages the full lifecycle of obs data in a DA run (read on construction, optional write on destruction). Exposes `begin()`/`end()` returning `ioda::ObsIterator` for location-based traversal. Supports continuous/cycling DA via `updateObsSpace(cdaConfig)`: shifts the time window forward, appends a new obs directory, and drops obs falling outside the shifted window via `reduce()`. Attached `ObsSpaceAssociated` consumers (`ObsVector`, `ObsDataVector<T>`) stay in sync through `attach()` plus the `reduce()`/`append()`/`syncAppend()` virtuals.
+- `ioda::ObsSpace` — main class; derives from `util::Printable` only (no `oops::ObsSpaceBase` base, #1954); provides `windowStart()`/`windowEnd()`, `getSeed()`, and `redistribute(config)` itself. Manages the full lifecycle of obs data in a DA run (read on construction, optional write on destruction). Exposes `begin()`/`end()` returning `ioda::ObsIterator` for location-based traversal. Supports continuous/cycling DA via `updateObsSpace(cdaConfig)`: shifts the time window forward, appends a new obs directory, and drops obs falling outside the shifted window via `reduce()`. Attached `ObsSpaceAssociated` consumers (`ObsVector`, `ObsDataVector<T>`) stay in sync through `attach()` plus the `reduce()`/`append()`/`syncAppend()` virtuals. `ObsSpaceAssociated` lives in its own header (`ObsSpaceAssociated.h`), and `ObsSpace.h`/`ObsVector.h` use forward declarations, so consumers must include what they use (#1852, #1868).
 - `ioda::ObsIterator` — forward iterator over obs locations; dereferences to `eckit::geometry::Point3(lon, lat, z)`. `z` defaults to `0` but is read from `MetaData/<verticalCoordinate>` when the obs space's `iterator vertical coordinate` YAML key names a variable — enables 3D (vertical) localization for the sequential EnKF/EAKF solver via `GeometryIterator` (PR #1734). `ObsSpace::verticalCoordinate()` exposes the configured name as `boost::optional<std::string>`. Aliased as `IodaTrait::GeometryIterator`. Copy-constructible but **not** copy-assignable (`operator=` is explicitly deleted, PR #1810, because of the reference member): rebind by copy-construction, not assignment.
 - `ioda::ObsVector` — observation vector for DA algorithms
 - `ioda::ObsDataVector<T>` — templated obs data container
-- `ioda::Distribution` (`src/distribution/`) — MPI distribution strategies: `RoundRobin`, `Halo`, `InefficientDistribution`, etc.
+- `ioda::Distribution` (`src/distribution/`) — MPI distribution strategies: `RoundRobin`, `Halo`, `InefficientDistribution`, etc. Whether `obsgrouping` applies is the `DistributionParametersBase::applyObsGrouping()` virtual (default `true`); Halo returns `false` unless `enable obs grouping for halo: true` (#1886). Identity indexes locations like the other distributions (#1900).
 - `ioda::IoPool` (`src/ioPool/`) — parallel I/O pool management; decouples MPI ranks from I/O tasks
 - `src/containers/` — OSDF (Observation Space Data Format) container classes under `namespace osdf`: `IFrame`, `FrameCols`, `FrameRows`, `FrameMetadata`, `Data<T>`, etc.
 - `src/reader/` — obs reading pipeline: load → filter → distribute
@@ -69,7 +69,7 @@ Missing value conventions: `util::missingValue<T>()` — `9.969209968e+36` for f
 
 ### Backend Details
 
-**HDF5 (HH)**: Default file I/O backend. Supports parallel HDF5 for multi-rank writes. Files use `.nc4` or `.nc` extensions with HDF5 format underneath. The H5File reader supports **multiple input files** via the `obsfiles` YAML parameter — observations from all listed files are appended along the Location dimension. As of PR #1753, `Read{H5,Odb,Bufr}FileParameters::getFileName()` falls back to `obsfiles[0]` when `obsfile` is empty — a temporary fix so CDA / `updateObsSpace` workflows work against multi-file input; the callers that need a single name should eventually handle the whole list.
+**HDF5 (HH)**: Default file I/O backend. Supports parallel HDF5 for multi-rank writes. Files use `.nc4` or `.nc` extensions with HDF5 format underneath. The H5File reader supports **multiple input files** via the `obsfiles` YAML parameter — observations from all listed files are appended along the Location dimension. As of PR #1753, `Read{H5,Odb,Bufr}FileParameters::getFileName()` falls back to `obsfiles[0]` when `obsfile` is empty — a temporary fix so CDA / `updateObsSpace` workflows work against multi-file input; the callers that need a single name should eventually handle the whole list. The OSDF reader also reads every file listed in `obsfiles` (#1888).
 
 **BUFR**: Reads BUFR files using `bufr_query` library. Requires a **mapping file** (YAML) that defines how BUFR descriptors map to IODA variables/groups. Mapping files live alongside test data.
 
@@ -120,7 +120,11 @@ The `osdf` namespace (`src/containers/`) provides column- and row-oriented data 
 
 **General 2D variables in `FrameMetadata`** (PR #1775): `FrameMetadata` is generalized from channel-specific to **arbitrary named second dimensions** (e.g. `"Channel"`, `"Level"`, `"nfactors"`). The channel-only API is replaced by generic accessors keyed on a dimension name: `setDimNums(dimName, nums)` / `getDimNums(dimName)` / `hasDim(dimName)` / `getDimNames()`, backed by `std::unordered_map<std::string, std::vector<int>> dimNums_` (was `chanNums_` + `varsWithChans_`). New helpers: `varSliceDimName(varName)` (the first non-`Location` dim, or `""` for 1D), and `getMultiSliceVars()` (all vars with any non-`Location` dim). Terminology throughout is now "slice dimension" rather than "second dimension". As of the phase-4 completion (PR #1779) the old channel-specific backward-compat wrappers (`setChanNums`/`getChanNums`/`varHasChannels`/`getVarsWithChans`) are **removed**; callers use the generic `setDimNums`/`getDimNums`/`hasDim`/`getDimNames` API directly. Correspondingly, `OsdfFrameFacade::setTypedIodaVariableValues` takes `const std::string& sliceDimName` in place of the old `bool hasChannelAxis`. Matching renames landed in `ObsSpace`: `chanSelect`→`sliceSelect`, `createChannelSelections`→`createSliceSelections`, `splitChanSuffix`→`splitSliceSuffix` (affects `get_db`/`loadVar` signatures); OSDF trailing-numeric-suffix handling is now aligned with `ObsGroup` behavior (PR #1794). Follow-up fix (PR #1840): `ObsSpace::has()` no longer falls back to the base name when a requested name carries a spurious numeric suffix — `has("MetaData/latitude_1")` is now `false` — while `dtype()`/`get_db`/`splitSliceSuffix` still strip it; this avoids a 1D `var_1` colliding with a channelled `var` stored as columns `var_1..var_N` (the collision is only partly solved upstream).
 
-**Consolidated OSDF variable-existence checks** (PR #1848): two new free functions in `core/IodaUtils.h` are now the single source of truth for mapping a variable name to its OSDF columns. `osdfVarColumnNames(frameMetadata, fullVarName)` returns the column names — one `<name>_<slice>` per registered slice-dimension value, or the verbatim name for a 1D variable — and is never empty. `osdfVarColumns(frame, metadata, fullVarName)` returns the actual columns (empty means absent), testing a representative column. `ObsSpace::osdfVarNameToUse()` is **gone**, replaced by the private `osdfColumnsFor(group, name)`; `has()`, `dtype()`, and `groupToUse()` are all built on it so they can no longer disagree. `groupToUse()` deliberately does not go through `has()`, which reports everything as present on an empty ObsSpace. `OsdfFrameFacade::hasVariable`/`variableType`/`removeVariable` use the same helpers. The 1D `var_1` vs. 2D `var` slice-1 storage collision remains an open TODO.
+**Consolidated OSDF variable-existence checks** (PR #1848): two new free functions in `core/IodaUtils.h` are now the single source of truth for mapping a variable name to its OSDF columns. `osdfVarColumnNames(frameMetadata, fullVarName)` returns the column names — one `<name>_<slice>` per registered slice-dimension value, or the verbatim name for a 1D variable — and is never empty. `osdfVarColumns(frame, metadata, fullVarName)` returns the actual columns (empty means absent), testing a representative column. `ObsSpace::osdfVarNameToUse()` is **gone**, replaced by the private `osdfColumnsFor(group, name)`; `has()`, `dtype()`, and `groupToUse()` are all built on it so they can no longer disagree. `groupToUse()` deliberately does not go through `has()`, which reports everything as present on an empty ObsSpace. `OsdfFrameFacade::hasVariable`/`variableType`/`removeVariable` use the same helpers. The 1D `var_1` vs. 2D `var` slice-1 storage collision remains an open TODO. Column names are built by `osdfSliceColumnName(fullVarName, sliceIndex)` with separator `osdfSliceSuffixSep` (`'_'`), both in `IodaUtils.h`; a guard rejects netCDF input variables whose names collide with another variable's OSDF slice columns (#1853).
+
+**Slice-dimension coordinates** (#1939): `FrameMetadata` stores per-dimension coordinate values as `DimCoords` (`setDimCoords`/`hasDimCoords`/`getDimCoords`), giving OSDF slice selection parity with ObsGroup.
+
+**netCDF Location chunking** (#1928): the OSDF netCDF writer chunks Location at `min(10000, nlocs)` (`locationChunkMax` in `save/saveObsToNetcdf.cpp`) rather than the netCDF default, avoiding many tiny chunks.
 
 **Serial single-file netCDF write** (PR #1818): with `write multiple files: false`, the OSDF netCDF writer produces one shared file *without* parallel HDF5. Rank 0 creates the full schema sized to the pool-wide `totalNlocs`, then each pool rank writes its slab at its own `nlocsStart` offset, in rank order, coordinated by a token handshake. This is the OSDF path's answer to workflows that need a single output file on stacks without parallel HDF5.
 
@@ -132,7 +136,11 @@ The `osdf` namespace (`src/containers/`) provides column- and row-oriented data 
 
 ## Tools
 
-`tools/ioda_compare_obs.py` (PR #1830): row-order-independent comparator for OSDF vs. ObsGroup output files. Canonically sorts full rows before comparing, normalizes `NC_CHAR`/`NC_UBYTE` booleans against string representations without widening integer types, treats coordinate-variable and attribute diffs as non-fatal unless `--strict`, accepts `--tolerance` for float comparisons, and handles multi-file (`_0000`-suffixed) output sets. Self-tested by the `ioda_compare_obs_selftest` ctest target, which needs no test data.
+`tools/ioda_compare_obs.py` (PR #1830): row-order-independent comparator for OSDF vs. ObsGroup output files. Canonically sorts full rows before comparing, normalizes `NC_CHAR`/`NC_UBYTE` booleans against string representations without widening integer types, treats coordinate-variable and attribute diffs as non-fatal unless `--strict`, accepts `--tolerance` for float comparisons, and handles multi-file (`_0000`-suffixed) output sets. Self-tested by the `ioda_compare_obs_selftest` ctest target, which needs no test data. `--dump` writes both sorted tables as text (identity variables first) for eyeballing diffs.
+
+`tools/ioda_compare_odb.py`: ODB counterpart; matches rows by identity columns first, then compares. Self-tested by `ioda_compare_odb_selftest.py`.
+
+`tools/ioda_check_container_pins.py` (ctest `ioda_check_container_pins`): fails if any test obs space takes its container from the `use data frame container` default instead of stating it (see Test Data).
 
 ## Test Data
 
@@ -142,6 +150,8 @@ Tests require the `ioda-data` repo checked out alongside the bundle, or test dat
 ```
 
 The `IODA_TESTFILES` environment variable can point to a local test data directory to avoid downloading.
+
+**Container pinning** (#1861, #1911): every test obs space must state its container, either in YAML (per space `use data frame container`, or file-wide `obs data container`) or via `IODA_TEST_CONTAINER` on the ctest registration, which is how one container-agnostic YAML is registered once per container. A YAML that names a container must not also be registered with `IODA_TEST_CONTAINER` (the YAML wins and collapses the pair). Enforced by `ioda_check_container_pins`.
 
 PR #1848 adds `ioda_osdf_var_columns` (`test/containers/OsdfVarColumns.h`, `test/mains/containers/TestOsdfVarColumns.cc`), which covers the OSDF column-naming rule for 1D, channelled, and absent variables.
 
@@ -195,7 +205,7 @@ Key Fortran interfaces (used by UFO and model repos via `obsspace_get_db`/`obssp
 ## Cross-Repo Role
 
 IODA provides the data-side of the `OBS` template parameter via `ufo::ObsTraits`:
-- `ioda::ObsSpace` — observation data container (extends `oops::ObsSpaceBase`)
+- `ioda::ObsSpace` — observation data container (derives from `util::Printable`, not `oops::ObsSpaceBase`; #1954)
 - `ioda::ObsVector` — observation value vectors used by oops cost functions
 - `ioda::ObsDataVector<T>` — templated data containers used by UFO filters
 
@@ -205,7 +215,7 @@ UFO depends on IODA for all observation data access. Model repos never call IODA
 
 - **HDF5** (parallel): primary file format
 - **eckit / fckit**: ECMWF toolkit (config, MPI, logging)
-- **oops**: JEDI algorithmic framework (`ObsSpaceBase`, `Parameters`, etc.)
+- **oops**: JEDI algorithmic framework (`Parameters`, `util::DateTime`/`TimeWindow`, etc.)
 - **Eigen3 / gsl-lite / Boost**: math and utility headers
 - **udunits**: unit conversion
 - **odc** (optional): ODB file support

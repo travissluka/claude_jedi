@@ -1,6 +1,6 @@
 # Coupling (Coupled Atmosphere-Ocean DA)
 
-> Last updated against commit `2afddc2e` (2026-08-27). Run `cd bundle/coupling && git log --oneline 2afddc2e..HEAD` to see what changed since.
+> Last updated against commit `07ad6e47` (2026-11-03). Run `cd bundle/coupling && git log --oneline 07ad6e47..HEAD` to see what changed since.
 >
 > **Covers:** oops::TraitCoupled<Traits1,Traits2>, oops::GeometryCoupled, oops::StateCoupled, oops::AuxCoupledModel, BlockDiagonalCovarianceCoupled, YAML `covariance model: Coupled Block Diagonal`, FV3-JEDI + SOCA coupled 3D-Var, OASIM ocean color operator.
 

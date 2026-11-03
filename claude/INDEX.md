@@ -15,6 +15,8 @@ Every per-repo and cross-cutting doc also has its own `> **Covers:** ...` line a
 | Nerger regulation for LETKF obs loc | `oops.md` (#local-ensemble-solvers) |
 | Cross-validation (subensembles) | `oops.md` (#cross-validation-localensembleda) |
 | Outer/inner-loop structure of Variational | `oops.md` (#cost-functions) |
+| Variational `output:` (increment/analysis writers, native vs structured) | `oops.md` (#cost-functions) |
+| LocalEnsembleDA `use linear observer`, Nonlinear/LinearEnsembleObservers, obs `redistribution` | `oops.md` (#localensembleda-driver-options) |
 
 ## Observations (H(x), filters, R)
 
@@ -82,6 +84,7 @@ Every per-repo and cross-cutting doc also has its own `> **Covers:** ...` line a
 | Topic | File |
 |-------|------|
 | ATLAS FieldSet, FunctionSpace, oops::FieldSet3D/4D | `atlas-fieldset-guide.md`, `oops.md` |
+| GeometryData; ProximitySearch / MeshTriangulation / SourceProximityPartitioner / InterpolationCache (shared kd-tree + triangulation registries) | `oops.md` (#key-base-classes) |
 | Factory + Maker registration, instantiate*Factory.h | `factory-pattern.md` |
 | Parameters_ / RequiredParameter / OptionalParameter / PolymorphicParameter | `parameters-system.md` |
 | MPI: commTime, commEns, GetValues allToAll, patchObs | `mpi-patterns.md` |

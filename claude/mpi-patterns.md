@@ -112,8 +112,9 @@ Accumulators and dot products automatically use patch ownership to prevent doubl
 The critical model-to-observation bridge uses `allToAll`:
 
 ```
-1. Each rank determines which geometry rank owns each observation:
-   task = geom.closestTask(obs_lat, obs_lon)
+1. Each rank determines which geometry rank interpolates each observation:
+   partitioner = LocalInterpolator::makeTargetPartitioner(geom)
+   task = partitioner.interpolatingTask(obs_lat, obs_lon)
 
 2. Group observations by destination rank
 

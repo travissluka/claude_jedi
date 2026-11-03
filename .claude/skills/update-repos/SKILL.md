@@ -63,8 +63,16 @@ _(none currently — every source repo in the bundle has a `claude/<repo>.md`)_
 
 When the code repo's `develop` is being pulled/merged in Phase 1, its paired data repo must be synced too — reference outputs are versioned with the code that produced them, and updating one without the other causes phantom test failures. If a code repo is *not* in this run's scope, leave its data repo alone.
 
-**Other data repos** (SKIP entirely — not tied to a single code repo):
-`jedi-model-data test-data-release`
+**Shared data repo** (sync whenever ANY code repo is in scope): `jedi-model-data`. It holds test inputs for several repos at once (e.g. saber and vader, via `build/<repo>/test/testdata/` symlinks), so a stale checkout breaks tests in whichever repo just pulled a commit that needs a new file. See which repos consume it with `find build -maxdepth 4 -lname '*jedi-model-data*' | cut -d/ -f2 | sort -u`.
+
+**Not a repo** (SKIP): `test-data-release` lives inside the bundle tree with no `.git` of its own.
+
+**Dirty data repos are an action item, never a silent skip.** Data repos go dirty without anyone editing them: tests write outputs through `build/` symlinks into the data checkout, and an interrupted LFS update leaves half-applied files. `sync.sh` then skips the repo and the run ends with stale data and phantom `No such file` / reference-mismatch failures. When a `*-data` repo (or `jedi-model-data`) reports `skipped / dirty working tree, N commits behind`, with N > 0, put it at the TOP of the Phase 4 action items and offer to restore and pull it. Get the user's OK first, because this discards the local changes (they may be deliberately regenerated references meant for a data PR):
+
+```
+git -C bundle/<data-repo> status --short | head     # show what would be discarded
+git -C bundle/<data-repo> checkout -- . && git -C bundle/<data-repo> pull --ff-only origin develop
+```
 
 **Special doc**: `cross-repo-interactions.md` — update only when multiple repos have cross-cutting API changes.
 
@@ -86,16 +94,16 @@ Each `claude/<repo>.md` has on line 3:
 Call the sync script **once** with the full list of source repos plus any paired data repos for code repos in scope:
 
 ```
-.claude/skills/update-repos/scripts/sync.sh oops ioda ioda-data ufo ufo-data saber vader fv3-jedi fv3-jedi-data mpas-jedi mpas-jedi-data pyiri-jedi jedi-docs soca coupling gsw crtm fv3-jedi-lm
+.claude/skills/update-repos/scripts/sync.sh oops ioda ioda-data ufo ufo-data saber vader fv3-jedi fv3-jedi-data mpas-jedi mpas-jedi-data pyiri-jedi jedi-docs soca coupling gsw crtm fv3-jedi-lm jedi-model-data
 ```
 
-Filter the repo list to user-specified repos if any were passed. Whenever a code repo with a paired data repo (`ioda`, `ufo`, `fv3-jedi`, `mpas-jedi`) survives the filter, append its paired data repo to the sync list. If the user explicitly excludes a code repo, drop its data repo too — never sync a data repo on its own.
+Filter the repo list to user-specified repos if any were passed. Whenever a code repo with a paired data repo (`ioda`, `ufo`, `fv3-jedi`, `mpas-jedi`) survives the filter, append its paired data repo to the sync list. If the user explicitly excludes a code repo, drop its data repo too — never sync a paired data repo on its own. `jedi-model-data` stays in the list whenever at least one code repo does.
 
 The script emits TSV: `repo  branch  dirty  action  result  details`. Parse it into the sync-results table.
 
 **What the script handles for you** (do NOT call these directly):
 - `.git` presence check → `skipped / no .git directory`
-- Dirty working tree → `skipped / dirty working tree` (leaves tree untouched)
+- Dirty working tree → `skipped / dirty working tree, N commits behind origin/develop` (fetches, but leaves the tree untouched; for data repos see "Dirty data repos" above)
 - Detached HEAD → `skipped / detached HEAD`
 - Fetch failure → `failed / fetch error (network?)`
 - `develop` branch: `git pull --ff-only origin develop`; diverged → `failed / diverged (ff-only refused)`
@@ -297,6 +305,7 @@ Cross-reference with `claude/active-projects.md`:
 _(omit section if every source repo is documented; otherwise list undocumented repos with new-commit summaries)_
 
 ### Action Items
+- [ ] Restore + pull stale dirty data repo <data-repo> (N commits behind; offer the command, needs user OK)
 - [ ] Resolve merge conflict in <repo> (if any from Phase 1)
 - [ ] Review <repo> changes for <project> impact
 - [ ] Consider adding claude/<repo>.md (if significant undocumented changes)

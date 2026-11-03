@@ -37,7 +37,12 @@ for repo in "$@"; do
   fi
 
   if [[ "$dirty" -gt 0 ]]; then
-    printf "%s\t%s\t%s\t-\tskipped\tdirty working tree\n" "$repo" "$branch" "$dirty"
+    behind="?"
+    if [[ $NO_PULL -eq 0 ]] && git -C "$dir" fetch origin >/dev/null 2>&1; then
+      behind=$(git -C "$dir" rev-list --count HEAD..origin/develop 2>/dev/null || echo "?")
+    fi
+    printf "%s\t%s\t%s\t-\tskipped\tdirty working tree, %s commits behind origin/develop\n" \
+      "$repo" "$branch" "$dirty" "$behind"
     continue
   fi
 

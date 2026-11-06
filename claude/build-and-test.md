@@ -107,9 +107,9 @@ If this section gets out of sync with CMake, refresh it as part of `/update-repo
 |------|-------|
 | **oops** | Tests in `l95/test/`, `qg/test/`, `coupled/test/`. L95 is the primary DA testbed. |
 | **ufo** | Tests named `ufo_test_tier1_<name>`. |
-| **saber** | Test dirs: `test/testinput/` (~250 YAMLs), `test/testref/`, `test/fctest/` (Fortran unit tests). Categories: DIRAC (impulse response), randomization, calibration/training, diagnostics, format conversion. |
+| **saber** | Test dirs: `test/testinput/` (~250 YAMLs), `test/testref/`, `test/fctest/` (Fortran unit tests). Categories: DIRAC (impulse response), randomization, calibration/training, diagnostics, format conversion. **Configure wipes `build/saber/test/testdata/`** (`test/CMakeLists.txt` `file(REMOVE_RECURSE testdata)`), and many tests read files earlier tests write there (calibration outputs, ensemble members), so any `ninja` that re-runs CMake invalidates a previous saber run: rerun the whole suite serially in test-number order before rerunning or regenerating individual tests. |
 | **vader** | Two test groups: `recipe_*.yaml` (~29) and `vader_*.yaml` (~27). Pattern: recipe test → NL + adjoint dot-product + planning. |
-| **fv3-jedi** | ~100+ YAML configs; test CMakeLists.txt ~2700 lines. `fv3jedi_hyb-4denvar_geos_sondes` and `fv3jedi_hyb-4denvar_llens_geos` carry no `LABELS`, so they run in the default tier and in CI (the former `tier2` / `ci_flake_disable` labels were dropped in fv3-jedi#1530). |
+| **fv3-jedi** | ~100+ YAML configs; test CMakeLists.txt ~2700 lines. **Never run its ctests with `-j`**: concurrent runs misbehave. Some tests also consume others' outputs (e.g. `fv3jedi_diffusionparameters` feeds `fv3jedi_dirac_gfs_diffusion` and `fv3jedi_process_perts_diffusion`), so run them serially in test-number order, and prefer `-R` subsets over the full ~180-test suite. `fv3jedi_hyb-4denvar_geos_sondes` and `fv3jedi_hyb-4denvar_llens_geos` carry no `LABELS`, so they run in the default tier and in CI (the former `tier2` / `ci_flake_disable` labels were dropped in fv3-jedi#1530). |
 | **soca** | 95+ YAMLs, 14 test executables, grid sizes 36×17×25 and 72×35×25 in `test/Data/`. |
 | **coupling** | 11 test targets, all using `MPI 6`. Test data symlinked from soca and fv3-jedi. |
 

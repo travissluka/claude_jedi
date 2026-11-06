@@ -2,3 +2,4 @@ bundle/
 build/
 ai_research/
 claude/archive/
+lit/*/.cache/

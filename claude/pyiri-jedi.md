@@ -1,6 +1,6 @@
 # PyIRI-JEDI
 
-> Last updated against commit `9cb34701` (2026-11-03). Run `cd bundle/pyiri-jedi && git log --oneline 9cb34701..HEAD` to see what changed since.
+> Last updated against commit `a16c59ff` (2026-11-09). Run `cd bundle/pyiri-jedi && git log --oneline a16c59ff..HEAD` to see what changed since.
 >
 > **Covers:** pyiri::Traits, PyIRI Python submodule, ObsSpacePyiri, ObsIterator, FieldsPyiri/StatePyiri, LETKF for ionosphere, field-line tracing, VTEC/slant TEC/electron density obs, CFFI Python↔Fortran bindings, custom interpolators for field-aligned geometry, SI density units, background/ensemble builder scripts.
 
@@ -25,11 +25,11 @@ Build/test quirks (Python 3.5+, CFFI, PyIRI submodule) in `claude/build-and-test
 2. **Python Adapter** — `python/pyiri_jedi/`
    - Grid generation on geomagnetic L-shell geometry (`grid.py`)
    - Ensemble I/O for NetCDF restart files (`ensemble_io.py`)
-   - Background/ensemble builders (PR #173): `build_background.py` (`generate_state_files` writes a PyIRI-derived state file, `build_member` builds one member with a randomized F10.7 centered on the observed value from `fetch_f107`/`get_f107`, or 120 for test ensembles) and the `build_ensemble.py` CLI wrapping it
+   - Background/ensemble builders (PR #173): `build_background.py` (`generate_state_files` writes a PyIRI-derived state file, `build_member` builds one member with a randomized F10.7 centered on the observed value from `fetch_f107`/`get_f107`, or 120 for test ensembles) and the `build_ensemble.py` CLI wrapping it. `generate_state_files` is split into `write_restart_file`, `write_grid_file`, and `write_f1_file`; the CLI flag is `--outname-date-format` (default `%Y%m%dT%H%M%SZ`) (#197)
    - Coordinate transformations geo ↔ magnetic (`coordconv.py`)
    - CFFI bindings to Fortran tracegrid modules
    - Forward operator implementations (`forward_operators.py`). Path integration is `integrate_geovals(integrand, interpolated_values, lower_limit, upper_limit)` (renamed and generalized from `integrate_vertical`, which took `alts`/`min_alt`/`max_alt`): trapezoidal rule with linear interpolation to the limits, returning `None` when the path has fewer than 2 points or lies entirely outside the limits, rather than asserting an exact limit match
-   - Geovals/H(x) file writers: `geovals_writer.py` (`get_vtec`, `get_slant_tec`, `get_path_latitude`/`get_path_longitude`, `read_obslocs_from_file`, `get_times_and_tinds`, `add_tracer_args`, `get_obs_parameters`) and `ensemble_tec_writer.py`, which writes an ensemble TEC/H(x) file for slant-path obs so LETKF can run with `read HX from disk`
+   - Geovals/H(x) file writers: `geovals_writer.py` (`get_vtec`, `get_slant_tec`, `get_path_latitude`/`get_path_longitude`, `read_obslocs_from_file`, `get_times_and_tinds`, `add_tracer_args`, `get_obs_parameters`) and `ensemble_tec_writer.py`, which writes an ensemble TEC/H(x) file for slant-path obs so LETKF can run with `read HX from disk`. For OSDF, output uses a `Location` dimension (not `nlocs`) and adds `nlevs`/`nion` coordinate variables; `nion` is created only when the input has it (#219)
 
 3. **C++ JEDI Model** — `src/pyiri-jedi/Model/`
    - Full OOPS model implementation (~35 headers, ~26 .cc files)

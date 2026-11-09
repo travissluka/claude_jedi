@@ -1,6 +1,6 @@
 # OOPS (Object Oriented Prediction System)
 
-> Last updated against commit `26cd7165` (2026-11-03). Run `cd bundle/oops && git log --oneline 26cd7165..HEAD` to see what changed since.
+> Last updated against commit `e1f63f75` (2026-11-09). Run `cd bundle/oops && git log --oneline e1f63f75..HEAD` to see what changed since.
 >
 > **Covers:** Variational, CostFunction, CostFct3DVar/3DFGAT/4DVar/WC4DVar/4DEnsVar, CostJo, CostJb3D/4D/Jq, Minimizer (PCG/DRPCG/FGMRES/RPCG/...), LocalEnsembleSolver, LETKF/GETKF (Deterministic/Stochastic), SequentialEnsembleSolver/EAKF, LocalEnsembleDA, Observer, Observers, Variables, FieldSet3D/4D, FieldSets, IncrementSet, StateSet, GeometryData, ProximitySearch/MeshTriangulation/InterpolationCache, Nonlinear/LinearEnsembleObservers, PseudoModel, CommRedistribution, CommRedistributionRepository, FieldSetSubCommunicators, Application runs (Forecast/HofX/EDA/GenEnsPertB/...), inflation (RTPP/RTPS/mult), cross-validation, Nerger regulation, implicit/explicit Diffusion, L95/QG toy models.
 
@@ -202,6 +202,6 @@ oops defines the `MODEL` and `OBS` template contracts that all other repos imple
 - **Model repos** (fv3-jedi, mpas-jedi, pyiri-jedi) implement `MODEL` traits: Geometry, State, Increment, Model, etc.
 - **UFO/IODA** implement `OBS` traits via `ufo::ObsTraits`: ObsSpace (ioda), ObsOperator (ufo), GeoVaLs (ufo)
 - **SABER** registers as a covariance model via `saber::instantiateCovarFactory<MODEL>()`
-- **GetValues** (`base/GetValues.h`) bridges MODEL state to OBS operators by interpolating to obs locations
+- **GetValues** (`base/GetValues.h`) bridges MODEL state to OBS operators by interpolating to obs locations. Buffer sizing and send/recv layouts live in `base/ObsBufferDescriptor.h` (per-task, per-sampling-method counts; `bufferSize(jtask, varsizes)`), time weighting in `base/TimeInterpolationAccumulator.h` (#3398); neither depends on MODEL/OBS, and both are unit-tested via `test/base/GetValuesUtils.h`
 
 See `claude/cross-repo-interactions.md` for full details.

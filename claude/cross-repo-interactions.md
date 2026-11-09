@@ -1,6 +1,6 @@
 # Cross-Repo Interactions
 
-> Last updated 2026-11-03. Based on the same repo commits as the individual `claude/*.md` files.
+> Last updated 2026-11-09. Based on the same repo commits as the individual `claude/*.md` files.
 >
 > **Covers:** MODEL template contract (Geometry/State/Increment/Model/LinearModel/VariableChange/LinearVariableChange/ErrorCovariance/ModelAux*/LocalInterpolator/ModelData), ufo::ObsTraits, GetValues<MODEL,OBS>, saber::ErrorCovariance<MODEL>, instantiateCovarFactory, instantiateObsFilterFactory, instantiateObsLocFactory, ATLAS as shared data layer, impact map (what-changes-affects-what), C++/Fortran interop patterns (ISO_C_BINDING / opaque-handle / ATLAS bridge), coupled DA, CRTM integration.
 
@@ -120,6 +120,8 @@ Auxiliary state for model bias/parameters; minimal stubs in most repos. ModelAux
 
 As of oops PR #3202 (2026-04-22), `oops::Locations<OBS>` wraps the list of `ufo::SampledLocations` (one per sampling method) and the loop over sampling methods moved *inside* GetValues. Previously, `Observer`/`ObserverTLAD` iterated sampling methods externally and constructed a `GetValues` per method. The obs-side `ufo::SampledLocations` type is unchanged; the change is purely in how oops constructs and drives the bridge.
 
+Inside GetValues, MPI buffer sizing/layout is `oops::ObsBufferDescriptor` and time-interpolation weighting is `oops::TimeInterpolationAccumulator` (oops #3398); both are MODEL/OBS-independent and unit-tested in `src/test/base/GetValuesUtils.h`, so edit and test them there.
+
 Both fv3-jedi and mpas-jedi use `oops::UnstructuredInterpolator` as their `LocalInterpolator`. pyiri-jedi implements custom interpolators for field-aligned geometry. soca uses the same pattern for ocean/ice observations.
 
 ## How SABER Provides Error Covariance to Any Model
@@ -157,7 +159,7 @@ saber #1288 dropped the `Saber` class prefix (`SaberOuterBlockBase`→`OuterBloc
 
 **ioda** handles data I/O and storage. **ufo** handles physics (operators, filters, bias).
 
-`ioda::ObsSpace` derives only from `util::Printable`, not `oops::ObsSpaceBase` (which survives only for the toy models qg/l95). Any `OBS::ObsSpace` must implement `redistribute(const eckit::Configuration &)`; `oops::ObsSpaces::redistribute` forwards each `obs space.redistribution:` subconfig when present.
+`oops::ObsSpaceBase` is gone (oops #3441): `ioda::ObsSpace` and the qg/l95 toy ObsSpaces derive only from `util::Printable`, and every `OBS::ObsSpace` must provide `timeWindow()` (returning `util::TimeWindow`) itself; `oops::ObsSpace::windowStart()`/`windowEnd()` read it from there. Any `OBS::ObsSpace` must implement `redistribute(const eckit::Configuration &)`; `oops::ObsSpaces::redistribute` forwards each `obs space.redistribution:` subconfig when present.
 
 **Two breaking contract changes on the OBS side** (oops #3358 / #3367, ufo #4278/#4298):
 

@@ -1,6 +1,6 @@
 # jedi-docs
 
-> Last updated against commit `1acac331` (2026-11-03). Run `cd bundle/jedi-docs && git log --oneline 1acac331..HEAD` to see what changed since.
+> Last updated against commit `c71b63ab` (2026-11-09). Run `cd bundle/jedi-docs && git log --oneline c71b63ab..HEAD` to see what changed since.
 >
 > **Covers:** IODA data conventions (variable naming, units, groups), spack-stack/JEDI version compatibility, JEDI git flow (main/develop/feature/bugfix/hotfix/release), YAML config reference, JEDI-EDU tutorials, build troubleshooting FAQ.
 
@@ -16,6 +16,7 @@ External Sphinx/RST docs at `bundle/jedi-docs/`, hosted on ReadTheDocs. **Trust 
 | **YAML config reference** with annotated examples | `docs/inside/jedi-components/configuration/` |
 | **JEDI-EDU tutorials** — DA concepts using L95 (3D-Var, ensemble, hybrid) | `jedi-edu/` |
 | **Build troubleshooting FAQ** | `docs/FAQ/` |
+| **SABER user guide**: multivariate strategy, ensemble filtering, multi-scale localization | `docs/inside/jedi-components/saber/SABER_UserGuide.rst` |
 
 For code-level questions (classes, factories, methods, file layouts), prefer the per-repo docs in `claude/` over jedi-docs.
 

@@ -1,6 +1,6 @@
 # VADER (The VAriable DErivation Repository)
 
-> Last updated against commit `1555dbfb` (2026-11-03). Run `cd bundle/vader && git log --oneline 1555dbfb..HEAD` to see what changed since.
+> Last updated against commit `90120117` (2026-11-09). Run `cd bundle/vader && git log --oneline 90120117..HEAD` to see what changed since.
 >
 > **Covers:** Vader, RecipeBase, DefaultCookbook, VaderParameters, planVariable algorithm, _A/_B/_C recipe variants, changeVar/changeVarTraj/changeVarTL/changeVarAD, AirTemperature, DryAirDensity, HydrostaticPressure, RelativeHumidity, MoistureControl, Met Office SVP lookup tables (`src/mo/`), DustBin1MassConcentration_A, DustBin2MassConcentration_A, eval_dust_bin_mass_concentration_nl, the dust 2-mode recipes and `eval_dust_2mode_variables`, the GSI-flavor `_B` cloud recipes, `util::for_each_column`, GSW OceanConversions, adjoint dot-product test pattern, adding a new recipe.
 
@@ -97,7 +97,7 @@ VADER follows JEDI naming standards (from jedi-docs conventions):
 
 **Ozone** (2): MoleFractionOfOzoneInAir (A) → `mole_fraction_of_ozone_in_air` (PR #377); OzoneMassMixingRatio (A) → `ozone_mass_mixing_ratio` from `mole_fraction_of_ozone_in_air` using `constoz`, the inverse of MoleFractionOfOzoneInAir_A (PR #421)
 
-**Density** (3): DryAirDensity, DryAirDensityLevelsMinusOne, AirDensityLevelsMinusOne
+**Density** (3): DryAirDensity, DryAirDensityLevelsMinusOne, AirDensityLevelsMinusOne. `DryAirDensity_A` takes `air_temperature`, `air_pressure`, and `water_vapor_mixing_ratio_wrt_moist_air`, computing the dry-air density ρ_dry = p(1−q)/(Rd T(1+ε* q)) with ε* = 1/ε − 1; needs model data `gas_constant_of_dry_air` and `epsilon` (#415)
 
 **Wind** (3): EastwardWindAt10m, NorthwardWindAt10m, WindReductionFactorAt10m
 
